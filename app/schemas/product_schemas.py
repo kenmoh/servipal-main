@@ -13,11 +13,11 @@ class ProductItemCreate(BaseModel):
     description: Optional[str] = None
     price: Decimal = Field(..., gt=0)
     stock: int = Field(..., ge=0, description="Initial stock quantity")
-    sizes: Optional[List[str]] = Field(
-        None, description="Available sizes e.g. ['S', 'M', 'L']"
+    sizes: Optional[List[int | Literal["S", "M", "L", "XL", "XXL"]]] = Field(
+        None, description="Available sizes e.g. ['S', 'M', 'L', 45, 32]"
     )
     colors: Optional[List[str]] = Field(
-        None, description="Available colors e.g. ['Red', 'Blue']"
+        None, description="Available colors e.g. ['Red', 'Blue', '#000000']"
     )
     category_id: Optional[UUID] = None
     images: List[str] = Field(default_factory=list, description="URLs after upload")
@@ -38,7 +38,7 @@ class ProductItemResponse(BaseModel):
     seller_id: UUID
     name: str
     description: Optional[str]
-    price: Decimal
+    price: Decimal = Field(gt=0, default=0.00, max_digits=6, decimal_places=2)
     stock: int
     in_stock: bool
     total_sold: int

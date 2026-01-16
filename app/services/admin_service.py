@@ -1,4 +1,4 @@
-from datetime import  timedelta
+from datetime import timedelta
 from typing import cast
 from supabase import AsyncClient
 from postgrest.types import CountMethod
@@ -36,7 +36,7 @@ async def list_users(
         if filters.search:
             # Search in name, email, phone - use ilike with separate filters
             search_term = f"%{filters.search}%"
-            
+
             pass  # Will filter after fetch
 
         # Get total count

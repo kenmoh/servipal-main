@@ -15,6 +15,11 @@ class VendorOrderActionResponse(BaseModel):
     message: str
 
 
+class LocationCoordinates(BaseModel):
+    latitude: float
+    longitude: float
+
+
 class VendorResponse(BaseModel):
     id: UUID
     store_name: str
@@ -24,7 +29,7 @@ class VendorResponse(BaseModel):
     average_rating: Decimal = 0.0
     review_count: int = 0
     state: Optional[str]
-    distance_km: Optional[Decimal] = None
+    location_coordinates: Optional[LocationCoordinates] = None
     is_open: bool = False  # We'll calculate from opening_hours
     total_items: int = 0
     can_pickup_and_dropoff: bool = False

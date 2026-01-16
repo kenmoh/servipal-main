@@ -19,7 +19,7 @@ from app.dependencies.auth import get_current_profile, require_user_type
 from app.dependencies.auth import get_customer_contact_info
 from app.schemas.user_schemas import UserType
 
-router = APIRouter(prefix="/api/v1/product", tags=["Product"])
+router = APIRouter(prefix="/api/v1/product", tags=["Marketplace"])
 
 
 # ───────────────────────────────────────────────

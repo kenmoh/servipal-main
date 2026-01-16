@@ -13,6 +13,7 @@ from app.routes import (
     wallet_route,
     admin_router,
     product_route,
+dispute_route
 )
 from app.config.logging import logger
 
@@ -109,4 +110,5 @@ app.include_router(review_router.router)
 app.include_router(food_router.router)
 app.include_router(laundry_route.router)
 app.include_router(product_route.router)
+app.include_router(dispute_route.router)
 app.include_router(admin_router.router, include_in_schema=False)
