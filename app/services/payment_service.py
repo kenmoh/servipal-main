@@ -52,6 +52,7 @@ async def process_successful_delivery_payment(
                     "additional_info": delivery_data.get("additional_info"),
                     "delivery_type": delivery_data["delivery_type"],
                     "total_price": expected_fee,
+                    "package_image_url": pending.get("package_image_url"),
                     "grand_total": expected_fee,
                     "amount_due_dispatch": expected_fee
                     * await get_commission_rate("DELIVERY", supabase),

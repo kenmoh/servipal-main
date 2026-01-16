@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, File, UploadFile
 from uuid import UUID
+import uuid
+from typing import Optional
 
 from app.schemas.delivery_schemas import (
     PackageDeliveryCreate,
@@ -8,7 +10,7 @@ from app.schemas.delivery_schemas import (
     DeliveryAction,
     DeliveryActionResponse,
     DeliveryCancelRequest,
-    DeliveryCancelResponse,
+    DeliveryCancelResponse, DeliveryType,
 )
 from app.services.delivery_service import (
     initiate_delivery_payment,
@@ -27,6 +29,7 @@ from app.dependencies.auth import (
 from app.database.supabase import get_supabase_client
 from app.schemas.user_schemas import UserType
 from app.config.logging import logger
+from  app.utils.storage import upload_to_supabase_storage
 
 router = APIRouter(tags=["Deliveries"], prefix="/api/v1")
 
@@ -34,22 +37,63 @@ router = APIRouter(tags=["Deliveries"], prefix="/api/v1")
 # ───────────────────────────────────────────────
 # 1. Initiate Payment (Create Draft Order + Fee)
 # ───────────────────────────────────────────────
+# @router.post("/delivery/initiate-payment")
+# async def initiate_delivery_payment_endpoint(
+#     data: PackageDeliveryCreate,
+#     request: Request = None,
+#     current_profile: dict = Depends(get_current_profile),
+#     supabase=Depends(get_supabase_client),
+#     customer_infor: dict = Depends(get_customer_contact_info),
+# ):
+#     """
+#     Calculate fee, generate tx_ref, save pending state.
+#     Returns data for Flutterwave RN SDK (NO payment link).
+#     """
+#     logger.info("initiate_delivery_payment_endpoint", sender_id=current_profile["id"])
+#     return await initiate_delivery_payment(
+#         data, current_profile["id"], supabase, customer_infor, request
+#     )
+
 @router.post("/delivery/initiate-payment")
 async def initiate_delivery_payment_endpoint(
-    data: PackageDeliveryCreate,
-    request: Request = None,
+    receiver_phone: str = Form(...),
+    pickup_location: str = Form(...),
+    destination: str = Form(...),
+    pickup_lat: float = Form(...),
+    pickup_lng: float = Form(...),
+    dropoff_lat: float = Form(...),
+    dropoff_lng: float = Form(...),
+    additional_info: Optional[str] = Form(...),
+    delivery_type: DeliveryType = Form("STANDARD"),
+    package_image: Optional[UploadFile] = File(...),
     current_profile: dict = Depends(get_current_profile),
-    supabase=Depends(get_supabase_client),
-    customer_infor: dict = Depends(get_customer_contact_info),
+    supabase = Depends(get_supabase_client),
+    customer_info: dict = Depends(get_customer_contact_info),
+request: Request = None,
 ):
-    """
-    Calculate fee, generate tx_ref, save pending state.
-    Returns data for Flutterwave RN SDK (NO payment link).
-    """
-    logger.info("initiate_delivery_payment_endpoint", sender_id=current_profile["id"])
-    return await initiate_delivery_payment(
-        data, current_profile["id"], supabase, customer_infor, request
+    # Upload image if provided
+
+    folder = f"deliveries/{uuid.uuid4().hex[:8]}"
+    url = await upload_to_supabase_storage(
+        file=package_image,
+        supabase=supabase,
+        bucket="delivery-images",
+        folder=folder
     )
+
+    data = PackageDeliveryCreate(
+        receiver_phone=receiver_phone,
+        pickup_location=pickup_location,
+        destination=destination,
+        pickup_coordinates=(pickup_lat, pickup_lng),
+        dropoff_coordinates=(dropoff_lat, dropoff_lng),
+        additional_info=additional_info,
+        delivery_type=delivery_type,
+        package_image_url=url
+    )
+
+
+    return await initiate_delivery_payment(data, current_profile["id"], supabase, customer_info, request)
 
 
 # ───────────────────────────────────────────────

@@ -19,6 +19,7 @@ class PackageDeliveryCreate(BaseModel):
     dropoff_coordinates: tuple[float, float]
     additional_info: Optional[str] = None
     delivery_type: DeliveryType = DeliveryType.STANDARD
+    package_image_url: Optional[str] = Field(None, description="URL of uploaded package photo (optional)")
 
 
 class AssignRiderRequest(BaseModel):

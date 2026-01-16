@@ -5,7 +5,12 @@ from typing import Optional, List
 from decimal import Decimal
 from fastapi import HTTPException, status, Request
 from app.utils.redis_utils import save_pending
-from app.schemas.common import VendorOrderAction
+from app.schemas.common import (
+    VendorOrderAction,
+    PaymentInitializationResponse,
+    PaymentCustomerInfo,
+    PaymentCustomization,
+)
 from app.schemas.laundry_schemas import (
     LaundryVendorDetailResponse,
     LaundryCategoryResponse,
@@ -444,18 +449,18 @@ async def initiate_laundry_payment(
         await save_pending(f"pending_laundry_{tx_ref}", pending_data, expire=1800)
 
         # Return SDK-ready data
-        return {
-            "tx_ref": tx_ref,
-            "amount": Decimal(grand_total),
-            "public_key": settings.FLUTTERWAVE_PUBLIC_KEY,
-            "currency": "NGN",
-            "customer": customer_info,
-            "customization": {
-                "title": "Servipal Laundry Order",
-                "description": f"Order from {vendor['store_name']}",
-            },
-            "message": "Ready for payment — use Flutterwave SDK",
-        }
+        return PaymentInitializationResponse(
+            tx_ref=tx_ref,
+            amount=Decimal(str(grand_total)),
+            public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+            currency="NGN",
+            customer=PaymentCustomerInfo(**customer_info),
+            customization=PaymentCustomization(
+                title="Servipal Laundry Order",
+                description=f"Order from {vendor['store_name']}",
+            ),
+            message="Ready for payment — use Flutterwave SDK",
+        ).model_dump()
 
     except Exception as e:
         raise HTTPException(500, f"Laundry payment initiation failed: {str(e)}")

@@ -11,17 +11,7 @@ from app.schemas.food_schemas import (
     FoodItemUpdate,
     CheckoutRequest,
 )
-from app.services.food_service import (
-    get_food_vendors,
-    get_vendor_detail,
-    vendor_food_order_action,
-    vendor_mark_food_order_ready,
-    customer_confirm_food_order,
-    create_food_item_with_images,
-    initiate_food_payment,
-)
-from app.dependencies.auth import get_current_profile, require_user_type
-from app.dependencies.auth import get_customer_contact_info
+from app.dependencies.auth import get_current_profile, require_user_type, get_customer_contact_info
 from app.schemas.user_schemas import UserType
 from app.services import food_service
 from app.database.supabase import get_supabase_client
@@ -40,7 +30,7 @@ async def list_food_vendors(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """Home screen - list of restaurant vendors (nearby if lat/lng provided)"""
-    return await get_food_vendors(supabase, lat, lng)
+    return await food_service.get_food_vendors(supabase, lat, lng)
 
 
 @router.get("/vendors/{vendor_id}", response_model=VendorDetailResponse)
@@ -48,7 +38,7 @@ async def get_vendor_menu(
     vendor_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
     """Vendor detail page with full menu and categories"""
-    return await get_vendor_detail(vendor_id, supabase)
+    return await food_service.get_vendor_detail(vendor_id, supabase)
 
 
 # ───────────────────────────────────────────────
@@ -68,7 +58,7 @@ async def add_menu_item_with_images(
 ):
     """Vendor adds a new food item with optional images"""
     logger.info("add_menu_item_endpoint", vendor_id=current_profile["id"], name=name)
-    return await create_food_item_with_images(
+    return await food_service.create_food_item_with_images(
         name=name,
         description=description,
         price=price,
@@ -141,7 +131,7 @@ async def get_my_menu(
 async def initiate_food_payment_endpoint(
     data: CheckoutRequest,
     request: Request = None,
-    current_profile: dict = Depends(get_current_profile),
+    current_profile: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """
@@ -153,7 +143,7 @@ async def initiate_food_payment_endpoint(
         customer_id=current_profile["id"],
         vendor_id=str(data.vendor_id),
     )
-    return await initiate_food_payment(data, current_profile["id"], supabase, request)
+    return await food_service.initiate_food_payment(data, current_profile["id"], supabase, request)
 
 
 @router.post("/orders/{order_id}/action")
@@ -168,7 +158,7 @@ async def vendor_food_order_action_endpoint(
     logger.info(
         "vendor_food_order_action_endpoint", order_id=str(order_id), action=action_data
     )
-    return await vendor_food_order_action(
+    return await food_service.vendor_food_order_action(
         order_id=order_id,
         vendor_id=current_profile["id"],
         supabase=supabase,
@@ -184,7 +174,7 @@ async def vendor_mark_ready_endpoint(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """Vendor marks food order as ready for pickup/delivery"""
-    return await vendor_mark_food_order_ready(
+    return await food_service.vendor_mark_food_order_ready(
         order_id, current_profile["id"], supabase=supabase
     )
 
@@ -202,7 +192,7 @@ async def customer_confirm_food_endpoint(
         order_id=str(order_id),
         customer_id=current_profile["id"],
     )
-    return await customer_confirm_food_order(
+    return await food_service.customer_confirm_food_order(
         order_id, current_profile["id"], supabase, request
     )
 

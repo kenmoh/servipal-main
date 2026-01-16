@@ -12,6 +12,11 @@ from app.schemas.delivery_schemas import (
     DeliveryAction,
     DeliveryActionResponse,
 )
+from app.schemas.common import (
+    PaymentInitializationResponse,
+    PaymentCustomerInfo,
+    PaymentCustomization,
+)
 from supabase import AsyncClient
 from app.utils.redis_utils import save_pending
 from app.utils.commission import get_commission_rate
@@ -82,24 +87,25 @@ async def initiate_delivery_payment(
             "delivery_data": data.model_dump(),
             "delivery_fee": float(delivery_fee),
             "tx_ref": tx_ref,
+            "package_image_url": data.package_image_url,
             "distance_km": distance_km,
             "created_at": datetime.datetime.now().isoformat(),
         }
         await save_pending(f"pending_delivery_{tx_ref}", pending_data, expire=1800)
 
         # 6. Return data for Flutterwave RN SDK
-        return {
-            "tx_ref": tx_ref,
-            "amount": delivery_fee,
-            "public_key": settings.FLUTTERWAVE_PUBLIC_KEY,
-            "currency": "NGN",
-            "customer": customer_info,
-            "customization": {
-                "title": "Servipal Delivery",
-                "description": f"From {data.pickup_location} to {data.destination} ({distance_km:.1f} km)",
-            },
-            "message": "Ready for payment — use Flutterwave SDK",
-        }
+        return PaymentInitializationResponse(
+            tx_ref=tx_ref,
+            amount=Decimal(str(delivery_fee)),
+            public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+            currency="NGN",
+            customer=PaymentCustomerInfo(**customer_info),
+            customization=PaymentCustomization(
+                title="Servipal Delivery",
+                description=f"From {data.pickup_location} to {data.destination} ({distance_km:.1f} km)",
+            ),
+            message="Ready for payment — use Flutterwave SDK",
+        ).model_dump()
 
     except Exception as e:
         logger.error(

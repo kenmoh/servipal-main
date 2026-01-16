@@ -5,6 +5,11 @@ from app.schemas.food_schemas import *
 from app.utils.storage import upload_to_supabase_storage
 from app.utils.redis_utils import save_pending
 from app.config.config import settings
+from app.schemas.common import (
+    PaymentInitializationResponse,
+    PaymentCustomerInfo,
+    PaymentCustomization,
+)
 from app.dependencies.auth import get_customer_contact_info
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
@@ -626,18 +631,18 @@ async def initiate_food_payment(
         customer_info = await get_customer_contact_info()
 
         # 7. Return SDK-ready data
-        return {
-            "tx_ref": tx_ref,
-            "amount": float(grand_total),
-            "public_key": settings.FLUTTERWAVE_PUBLIC_KEY,
-            "currency": "NGN",
-            "customer": customer_info,
-            "customization": {
-                "title": "Servipal Food Order",
-                "description": f"Order from {vendor['store_name']}",
-            },
-            "message": "Ready for payment — use Flutterwave SDK",
-        }
+        return PaymentInitializationResponse(
+            tx_ref=tx_ref,
+            amount=Decimal(str(grand_total)),
+            public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+            currency="NGN",
+            customer=PaymentCustomerInfo(**customer_info),
+            customization=PaymentCustomization(
+                title="Servipal Food Order",
+                description=f"Order from {vendor['store_name']}",
+            ),
+            message="Ready for payment — use Flutterwave SDK",
+        ).model_dump()
 
     except HTTPException:
         raise

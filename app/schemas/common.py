@@ -34,3 +34,24 @@ class VendorResponse(BaseModel):
     total_items: int = 0
     can_pickup_and_dropoff: bool = False
     pickup_and_delivery_charge: Decimal = Decimal("0.00")
+
+
+class PaymentCustomerInfo(BaseModel):
+    email: str
+    phone_number: str
+    name: str
+
+
+class PaymentCustomization(BaseModel):
+    title: str
+    description: str
+
+
+class PaymentInitializationResponse(BaseModel):
+    tx_ref: str
+    amount: Decimal
+    public_key: str
+    currency: str
+    customer: PaymentCustomerInfo
+    customization: PaymentCustomization
+    message: str
