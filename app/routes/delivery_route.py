@@ -1,0 +1,291 @@
+from fastapi import APIRouter, Depends, HTTPException
+from uuid import UUID
+
+from app.schemas.delivery_schemas import (
+    PackageDeliveryCreate,
+    AssignRiderRequest,
+    AssignRiderResponse,
+    DeliveryAction,
+    DeliveryActionResponse,
+    DeliveryCancelRequest,
+    DeliveryCancelResponse
+)
+from app.services.delivery_service import (
+    initiate_delivery_payment,
+    assign_rider_to_order,
+    rider_delivery_action,
+    rider_picked_up,
+    rider_confirm_delivery,
+    sender_confirm_receipt,
+    cancel_delivery
+)
+from app.dependencies.auth import get_current_profile, require_user_type, get_customer_contact_info
+from app.database.supabase import get_supabase_client
+from app.schemas.user_schemas import UserType
+
+router = APIRouter(tags=['Deliveries'], prefix="/api/v1")
+
+# ───────────────────────────────────────────────
+# 1. Initiate Payment (Create Draft Order + Fee)
+# ───────────────────────────────────────────────
+@router.post("/delivery/initiate-payment")
+async def initiate_delivery_payment_endpoint(
+    data: PackageDeliveryCreate,
+    current_profile: dict = Depends(get_current_profile),
+    supabase = Depends(get_supabase_client),
+customer_infor: dict = Depends(get_customer_contact_info)
+):
+    """
+    Calculate fee, generate tx_ref, save pending state.
+    Returns data for Flutterwave RN SDK (NO payment link).
+    """
+    return await initiate_delivery_payment(data, current_profile["id"], supabase, customer_infor)
+
+
+# ───────────────────────────────────────────────
+# 2. Assign Rider After Payment
+# ───────────────────────────────────────────────
+@router.post("/delivery-orders/{order_id}/assign-rider", response_model=AssignRiderResponse)
+async def assign_rider_endpoint(
+    order_id: UUID,
+    data: AssignRiderRequest,
+    current_profile: dict = Depends(get_current_profile),
+    supabase = Depends(get_supabase_client)
+):
+    """
+    Sender chooses rider after successful payment.
+    Re-checks rider availability.
+    """
+    return await assign_rider_to_order(order_id, data, current_profile["id"], supabase)
+
+
+# ───────────────────────────────────────────────
+# 3. Get Available Riders (Distance-Based)
+# ───────────────────────────────────────────────
+@router.get("/delivery/available-riders")
+async def get_available_riders(
+    lat: float,
+    lng: float,
+    max_distance_km: int = 20,
+    supabase = Depends(get_supabase_client)
+):
+    """
+    Get list of available riders near sender location, sorted by distance.
+    Only riders with has_delivery=false, online, active.
+    """
+    # Call RPC or query with PostGIS
+    riders = await supabase.rpc("get_available_riders", {
+        "p_lat": lat,
+        "p_lng": lng,
+        "p_max_km": max_distance_km
+    }).execute()
+
+    return {"riders": riders.data}
+
+
+# ───────────────────────────────────────────────
+# 4. Get Rider Details (For Selection Screen)
+# ───────────────────────────────────────────────
+@router.get("/riders/{rider_id}")
+async def get_rider_details(
+    rider_id: UUID,
+    supabase = Depends(get_supabase_client)
+):
+    """
+    Get full rider profile + stats for selection.
+    """
+    rider = await supabase.table("profiles")\
+        .select("""
+            id,
+            full_name,
+            phone_number,
+            profile_image_url,
+            bike_number,
+            average_rating,
+            review_count,
+            total_deliveries:count(deliveries where rider_id = id),
+            is_online,
+            is_verified
+        """)\
+        .eq("id", str(rider_id))\
+        .eq("user_type", "RIDER")\
+        .single()\
+        .execute()
+
+    if not rider.data:
+        raise HTTPException(404, "Rider not found")
+
+    return rider.data
+
+
+# ───────────────────────────────────────────────
+# 5. Rider Accept/Decline
+# ───────────────────────────────────────────────
+@router.post("/deliveries/{delivery_id}/action", response_model=DeliveryActionResponse)
+async def rider_act_on_delivery(
+    delivery_id: UUID,
+    action_data: DeliveryAction,
+    current_profile: dict = Depends(require_user_type([UserType.RIDER])),
+    supabase = Depends(get_supabase_client)
+):
+    return await rider_delivery_action(delivery_id, action_data, current_profile["id"], supabase)
+
+
+# ───────────────────────────────────────────────
+# 6. Rider Pickup
+# ───────────────────────────────────────────────
+@router.post("/deliveries/{delivery_id}/pickup")
+async def rider_pickup_package(
+    delivery_id: UUID,
+    current_profile: dict = Depends(require_user_type([UserType.RIDER])),
+    supabase = Depends(get_supabase_client)
+):
+    return await rider_picked_up(delivery_id, current_profile["id"], supabase)
+
+
+# ───────────────────────────────────────────────
+# 7. Rider Confirm Delivered
+# ───────────────────────────────────────────────
+@router.post("/deliveries/{delivery_id}/confirm-delivery")
+async def rider_confirm_delivered(
+    delivery_id: UUID,
+    current_profile: dict = Depends(require_user_type([UserType.RIDER])),
+    supabase = Depends(get_supabase_client)
+):
+    return await rider_confirm_delivery(delivery_id, current_profile["id"], supabase)
+
+
+# ───────────────────────────────────────────────
+# 8. Sender Confirm Receipt
+# ───────────────────────────────────────────────
+@router.post("/deliveries/{delivery_id}/confirm-receipt")
+async def confirm_package_received(
+    delivery_id: UUID,
+    current_profile: dict = Depends(get_current_profile),
+    supabase = Depends(get_supabase_client)
+):
+    return await sender_confirm_receipt(delivery_id, current_profile["id"], supabase)
+
+
+# ───────────────────────────────────────────────
+# 9. Cancel Delivery
+# ───────────────────────────────────────────────
+@router.post("/deliveries/{delivery_id}/cancel", response_model=DeliveryCancelResponse)
+async def cancel_delivery_endpoint(
+    delivery_id: UUID,
+    cancel_data: DeliveryCancelRequest,
+    current_profile: dict = Depends(get_current_profile),
+    supabase = Depends(get_supabase_client)
+):
+    return await cancel_delivery(
+        delivery_id,
+        cancel_data,
+        current_profile["id"],
+        current_profile["user_type"],
+        supabase
+    )
+
+
+
+
+# from fastapi import APIRouter, Depends
+#
+# from app.schemas.user_schemas import UserType
+# from app.services.delivery_service import (
+#     create_delivery_order,
+#     rider_delivery_action,
+#     rider_picked_up,
+#     sender_confirm_receipt,
+#     rider_confirm_delivery,
+#     cancel_delivery
+# )
+# from app.schemas.delivery_schemas import *
+# from uuid import UUID
+# from app.dependencies.auth import get_current_profile, require_user_type
+# from app.database.supabase import get_supabase_client
+#
+#
+#
+# router = APIRouter(tags=['Deliveries'], prefix="/api/v1/deliveries")
+#
+# @router.post("/delivery-orders", response_model=DeliveryOrderResponse)
+# async def create_delivery(
+#     order_data: DeliveryOrderCreate,
+#     current_user: dict = Depends(get_current_profile),
+#         supabase=Depends(get_supabase_client)
+# ):
+#     return await create_delivery_order(order_data, current_user["id"], supabase=supabase)
+#
+#
+# @router.post("/{delivery_id}/action", response_model=DeliveryActionResponse)
+# async def rider_act_on_delivery(
+#     delivery_id: UUID,
+#     action_data: DeliveryAction,
+#     current_profile: dict = Depends(require_user_type([UserType.RIDER])),
+#         supabase=Depends(get_supabase_client)
+# ):
+#     """
+#     Rider accepts or declines an assigned delivery.
+#     On decline: rider is automatically freed via trigger.
+#     """
+#     return await rider_delivery_action(delivery_id, action_data, current_profile["id"], supabase=supabase)
+#
+#
+#
+# @router.post("/{delivery_id}/pickup")
+# async def rider_pickup_package(
+#     delivery_id: UUID,
+#     current_profile: dict = Depends(require_user_type([UserType.RIDER])),
+#         supabase=Depends(get_supabase_client)
+# ):
+#     """
+#     Rider confirms they have picked up the package from the sender.
+#     Triggers money transfer from sender escrow → dispatch escrow.
+#     """
+#     return await rider_picked_up(delivery_id, current_profile["id"], supabase=supabase)
+#
+#
+# @router.post("/{delivery_id}/confirm-delivery")
+# async def rider_confirm_delivered(
+#     delivery_id: UUID,
+#     current_profile: dict = Depends(require_user_type([UserType.RIDER])),
+#         supabase=Depends(get_supabase_client)
+# ):
+#     """
+#     Rider confirms the package has been delivered.
+#     Optional: upload photo proof.
+#     Status changes to DELIVERED → sender can now confirm receipt.
+#     """
+#     return await rider_confirm_delivery(
+#         delivery_id=delivery_id,
+#         rider_id=current_profile["id"],
+#         supabase=supabase
+#     )
+#
+# @router.post("/{delivery_id}/confirm-receipt")
+# async def confirm_package_received(
+#     delivery_id: UUID,
+#     current_profile: dict = Depends(get_current_profile),
+#         supabase=Depends(get_supabase_client)
+# ):
+#     """
+#     Sender confirms they have received the package.
+#     Triggers final payment release from dispatch escrow → balance.
+#     """
+#     return await sender_confirm_receipt(delivery_id, current_profile["id"], supabase=supabase)
+#
+#
+# @router.post("/{delivery_id}/cancel", response_model=DeliveryCancelResponse)
+# async def cancel_delivery_endpoint(
+#     delivery_id: UUID,
+#     cancel_data: DeliveryCancelRequest,
+#     current_profile: dict = Depends(get_current_profile),
+#         supabase=Depends(get_supabase_client)
+# ):
+#     return await cancel_delivery(
+#         delivery_id=delivery_id,
+#         data=cancel_data,
+#         current_user_id=current_profile["id"],
+#         current_user_type=current_profile["user_type"],
+#         supabase=supabase
+#     )
