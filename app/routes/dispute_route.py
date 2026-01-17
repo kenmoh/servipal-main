@@ -22,6 +22,15 @@ async def create_dispute(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Create a new dispute.
+    
+    Args:
+        data (DisputeCreate): Dispute details.
+        
+    Returns:
+        DisputeResponse: Created dispute.
+    """
     return await dispute_service.create_dispute(data, current_profile["id"], supabase)
 
 
@@ -30,6 +39,12 @@ async def get_my_disputes(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Get disputes involved with the current user.
+    
+    Returns:
+        List[DisputeResponse]: List of disputes.
+    """
     # Fetch disputes where initiator or respondent
     return await dispute_service.get_my_disputes(current_profile["id"], supabase)
 
@@ -38,6 +53,15 @@ async def get_my_disputes(
 async def get_dispute_detail(
     dispute_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
+    """
+    Get details of a specific dispute.
+    
+    Args:
+        dispute_id (UUID): The dispute ID.
+        
+    Returns:
+        DisputeResponse: Dispute details with messages.
+    """
     # Fetch dispute + messages
     return await dispute_service.get_dispute_detail(dispute_id, supabase)
 
@@ -49,6 +73,16 @@ async def post_dispute_message(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Post a message to a dispute.
+    
+    Args:
+        dispute_id (UUID): The dispute ID.
+        data (DisputeMessageCreate): Message content.
+        
+    Returns:
+        dict: Created message.
+    """
     return await dispute_service.post_dispute_message(
         dispute_id, data, current_profile["id"], supabase
     )
@@ -63,6 +97,16 @@ async def resolve_dispute(
     ),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Admin/Moderator resolves a dispute.
+    
+    Args:
+        dispute_id (UUID): The dispute ID.
+        data (DisputeResolve): Resolution details.
+        
+    Returns:
+        dict: Resolution status.
+    """
     return await dispute_service.resolve_dispute(
         dispute_id=dispute_id,
         data=data,

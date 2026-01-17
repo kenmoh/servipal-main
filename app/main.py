@@ -89,12 +89,24 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/", tags=["Root"])
 async def root():
+    """
+    Root endpoint to verify API status.
+    
+    Returns:
+        dict: A welcome message, link to docs, and status.
+    """
     logger.debug("root_endpoint_accessed")
     return {"message": "Welcome to ServiPal API", "docs": "/docs", "status": "active"}
 
 
 @app.get("/health", tags=["Root"])
 async def health_check():
+    """
+    Health check endpoint.
+    
+    Returns:
+        dict: The health status of the application.
+    """
     logger.debug("health_check_accessed")
     return {"status": "healthy"}
 

@@ -14,19 +14,27 @@ async def register_push_token(
     supabase=Depends(get_supabase_client),
 ) -> FCMTokenResponse:
     """
-    Register or update device push token for notifications
-    Called on app start or token refresh
+    Register or update device push token for notifications.
+    Called on app start or token refresh.
+    
+    Args:
+        data (FCMTokenRegister): Token details.
+        
+    Returns:
+        FCMTokenResponse: Registration status.
     """
     return await register_fcm_token(data, current_profile["id"], supabase)
 
 
 @router.get("/register-token")
-async def register_push_token(
+async def get_push_token(
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_client),
 ) -> FCMTokenResponse:
     """
-
-    Get user token
+    Get user token.
+    
+    Returns:
+        FCMTokenResponse: Token details.
     """
     return await get_my_fcm_token(current_profile["id"], supabase)

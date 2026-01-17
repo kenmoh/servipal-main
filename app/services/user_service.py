@@ -8,9 +8,9 @@ from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
 
-# ========================
+# ───────────────────────────────────────────────
 # 1. Signup (Customer / Vendor / Dispatch)
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def create_user_account(
@@ -105,9 +105,9 @@ async def create_user_account(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# ========================
+# ───────────────────────────────────────────────
 # 2. Login
-# ========================
+# ───────────────────────────────────────────────
 async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
@@ -150,9 +150,9 @@ async def login_user(
         raise HTTPException(status_code=401, detail=f"Invalid credentials. {e}")
 
 
-# ========================
+# ───────────────────────────────────────────────
 # 3. Create Rider (by Dispatch only)
-# ========================
+# ───────────────────────────────────────────────
 async def create_rider_by_dispatch(
     data: RiderCreateByDispatch,
     current_profile: dict,
@@ -298,9 +298,9 @@ async def create_rider_by_dispatch(
         )
 
 
-# ========================
+# ───────────────────────────────────────────────
 # 4. Get Current User Profile
-# ========================
+# ───────────────────────────────────────────────
 async def get_user_profile(user_id: UUID, supabase: AsyncClient) -> UserProfileResponse:
     resp = (
         await supabase.table("profiles")
@@ -316,9 +316,9 @@ async def get_user_profile(user_id: UUID, supabase: AsyncClient) -> UserProfileR
     return UserProfileResponse(**resp.data)
 
 
-# ========================
+# ───────────────────────────────────────────────
 # 5. Update Profile
-# ========================
+# ───────────────────────────────────────────────
 async def update_user_profile(
     user_id: UUID,
     data: ProfileUpdate,
@@ -393,9 +393,9 @@ async def update_user_profile(
     return UserProfileResponse(**new_value)
 
 
-# ========================
+# ───────────────────────────────────────────────
 # 6. Refresh Online Status (call on every protected request)
-# ========================
+# ───────────────────────────────────────────────
 async def refresh_online_status(user_id: UUID, supabase: AsyncClient):
     await (
         supabase.table("profiles")
@@ -405,9 +405,9 @@ async def refresh_online_status(user_id: UUID, supabase: AsyncClient):
     )
 
 
-# ========================
+# ───────────────────────────────────────────────
 # 7. Get all available riders
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def get_available_riders(
@@ -434,9 +434,9 @@ async def get_available_riders(
         raise HTTPException(status_code=500, detail=f"Failed to fetch riders: {str(e)}")
 
 
-# ========================
-# 7. Get rider details
-# ========================
+# ───────────────────────────────────────────────
+# 8. Get Rider Details
+# ───────────────────────────────────────────────
 
 
 async def get_rider_details(
@@ -497,6 +497,9 @@ async def get_rider_details(
         raise HTTPException(500, "Failed to fetch rider details")
 
 
+# ───────────────────────────────────────────────
+# 9. Get My Riders (Dispatch)
+# ───────────────────────────────────────────────
 async def get_my_riders(
     dispatch_user_id: UUID, supabase: AsyncClient
 ) -> List[DispatchRiderResponse]:
@@ -514,6 +517,9 @@ async def get_my_riders(
         raise HTTPException(status_code=500, detail=f"Failed to fetch riders: {str(e)}")
 
 
+# ───────────────────────────────────────────────
+# 10. Suspend/Unsuspend Rider
+# ───────────────────────────────────────────────
 async def suspend_or_unsuspend_rider(
     data: RiderSuspensionRequest,
     dispatcher_id: UUID,
@@ -617,6 +623,9 @@ async def suspend_or_unsuspend_rider(
         raise HTTPException(500, f"Operation failed: {str(e)}")
 
 
+# ───────────────────────────────────────────────
+# 11. Rider & Vendor Earnings
+# ───────────────────────────────────────────────
 async def get_rider_earnings(
     rider_id: UUID, dispatcher_id: UUID, supabase: AsyncClient
 ) -> RiderEarningsResponse:
@@ -683,6 +692,9 @@ async def get_vendor_earnings(vendor_id: UUID, supabase: AsyncClient) -> dict:
     }
 
 
+# ───────────────────────────────────────────────
+# 12. Upload Profile Image
+# ───────────────────────────────────────────────
 async def upload_profile_image(
     file: UploadFile,
     user_id: UUID,
@@ -762,6 +774,9 @@ async def upload_profile_image(
         raise
 
 
+# ───────────────────────────────────────────────
+# 13. Update User Location
+# ───────────────────────────────────────────────
 async def update_user_location(
     user_id: UUID,
     data: UserLocationUpdate,

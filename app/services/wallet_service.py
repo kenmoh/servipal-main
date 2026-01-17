@@ -1,7 +1,6 @@
-from fastapi import HTTPException, status, Request
+from fastapi import HTTPException, status
 from uuid import UUID
 from decimal import Decimal
-from typing import List, Optional
 from datetime import datetime
 import uuid
 
@@ -19,7 +18,6 @@ from app.schemas.wallet_schema import (
 from app.config.config import settings
 from app.utils.redis_utils import save_pending
 from app.config.logging import logger
-from app.utils.audit import log_audit_event
 from app.dependencies.auth import get_customer_contact_info
 
 
@@ -52,8 +50,8 @@ async def get_wallet_details(
     )
 
     # Round to 2 decimal places (money standard)
-    balance = round(balance, 2)
-    escrow_balance = round(escrow_balance, 2)
+    balance = Decimal(round(balance, 2))
+    escrow_balance = Decimal(round(escrow_balance, 2))
 
     # Fetch transactions (limit to recent 20 for performance)
     tx_resp = (
@@ -70,11 +68,10 @@ async def get_wallet_details(
         transactions.append(
             WalletTransactionResponse(
                 tx_ref=tx["tx_ref"],
-                amount=round(float(tx["amount"]), 2) if tx["amount"] else 0.0,
+                amount=tx["amount"] if tx["amount"] else Decimal(0.0),
                 transaction_type=tx["transaction_type"],
                 status=tx["status"],
                 payment_method=tx["payment_method"],
-                details=tx["details"],
                 created_at=tx["created_at"],
                 from_user_id=tx["from_user_id"],
                 to_user_id=tx["to_user_id"],
@@ -98,7 +95,6 @@ async def initiate_wallet_top_up(
     data: TopUpRequest,
     user_id: UUID,
     supabase: AsyncClient,
-    request: Optional[Request] = None,
 ) -> WalletTopUpInitiationResponse:
     logger.info(
         "wallet_topup_initiated", user_id=str(user_id), amount=float(data.amount)
@@ -150,7 +146,7 @@ async def initiate_wallet_top_up(
             "amount": float(data.amount),
             "tx_ref": tx_ref,
             "payment_method": data.payment_method,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now().isoformat(),
         }
         await save_pending(f"pending_topup_{tx_ref}", pending_data, expire=1800)
 
@@ -163,7 +159,7 @@ async def initiate_wallet_top_up(
             amount=float(data.amount),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
             currency="NGN",
-            customer=customer_info,
+            customer=CustomerInfo(email=customer_info['email'], name=customer_info['phone']),
             customization=Customization(
                 title="Servipal Wallet Top-up",
                 description=f"Top up ₦{data.amount:,.2f} to your wallet",
@@ -202,14 +198,13 @@ async def initiate_wallet_top_up(
 async def pay_with_wallet(
     user_id: UUID,
     data: PayWithWalletRequest,
-    supabase: AsyncClient,
-    request: Optional[Request] = None,
-) -> dict:
+    supabase: AsyncClient
+) -> PayWithWalletResponse:
     """
     Deduct amount from user's wallet balance.
     - Checks sufficient balance
     - Atomic via RPC
-    - Records transaction
+    - Records trans action
     """
     logger.info(
         "wallet_payment_attempt",
@@ -285,20 +280,6 @@ async def pay_with_wallet(
             .execute()
         )
 
-        # Audit log
-        await log_audit_event(
-            supabase,
-            entity_type="WALLET",
-            entity_id=str(user_id),
-            action="PAYMENT",
-            old_value={"balance": float(old_balance)},
-            new_value={"balance": float(new_balance)},
-            change_amount=-data.amount,
-            actor_id=str(user_id),
-            actor_type="USER",
-            notes=f"Payment of {data.amount} from wallet",
-            request=request,
-        )
 
         logger.info(
             "wallet_payment_success",
@@ -310,7 +291,7 @@ async def pay_with_wallet(
         return PayWithWalletResponse(
             success=True,
             message="Payment successful from wallet",
-            new_balance=float(new_balance),
+            new_balance=new_balance,
             tx_ref=tx_ref,
         )
 

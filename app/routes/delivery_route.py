@@ -56,6 +56,12 @@ async def initiate_delivery_payment_endpoint(
     supabase=Depends(get_supabase_client),
     customer_info: dict = Depends(get_customer_contact_info),
 ):
+    """
+    Initiate a delivery request and calculate payment.
+    
+    Returns:
+        dict: Payment initiation details.
+    """
     # Upload image if provided
 
     folder = f"deliveries/{uuid.uuid4().hex[:8]}"
@@ -134,6 +140,16 @@ async def rider_act_on_delivery(
     current_profile: dict = Depends(require_user_type([UserType.RIDER])),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Rider accepts or declines a delivery request.
+    
+    Args:
+        delivery_id (UUID): The delivery ID.
+        action_data (DeliveryAction): 'ACCEPT' or 'DECLINE'.
+        
+    Returns:
+        DeliveryActionResponse: Result of the action.
+    """
     return await rider_delivery_action(
         delivery_id, action_data, current_profile["id"], supabase
     )
@@ -148,6 +164,15 @@ async def rider_pickup_package(
     current_profile: dict = Depends(require_user_type([UserType.RIDER])),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Rider confirms pickup of the package.
+    
+    Args:
+        delivery_id (UUID): The delivery ID.
+        
+    Returns:
+        dict: Status update.
+    """
     return await rider_picked_up(delivery_id, current_profile["id"], supabase)
 
 
@@ -160,6 +185,15 @@ async def rider_confirm_delivered(
     current_profile: dict = Depends(require_user_type([UserType.RIDER])),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Rider confirms delivery of the package.
+    
+    Args:
+        delivery_id (UUID): The delivery ID.
+        
+    Returns:
+        dict: Status update.
+    """
     return await rider_confirm_delivery(delivery_id, current_profile["id"], supabase)
 
 
@@ -173,6 +207,15 @@ async def confirm_package_received(
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Sender confirms receipt of the package (if applicable).
+    
+    Args:
+        delivery_id (UUID): The delivery ID.
+        
+    Returns:
+        dict: Status update.
+    """
     logger.info(
         "confirm_package_received_endpoint",
         delivery_id=str(delivery_id),
@@ -193,6 +236,16 @@ async def cancel_delivery_endpoint(
     current_profile: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Cancel an existing delivery.
+    
+    Args:
+        delivery_id (UUID): The delivery ID.
+        cancel_data (DeliveryCancelRequest): Reason for cancellation.
+        
+    Returns:
+        DeliveryCancelResponse: Cancellation result.
+    """
     return await cancel_delivery(
         delivery_id,
         cancel_data,
@@ -208,6 +261,12 @@ async def get_delivery_details(
     supabase=Depends(get_supabase_client),
     is_admin: bool = Depends(is_admin_user),
 ):
+    """
+    Get delivery orders for the current user.
+    
+    Returns:
+        list: List of delivery orders.
+    """
     return await get_delivery_orders(
         current_user_id=current_user["id"], supabase=supabase, is_admin=is_admin
     )

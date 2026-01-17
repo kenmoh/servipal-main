@@ -14,6 +14,9 @@ from app.config.logging import logger
 from datetime import datetime
 
 
+# ───────────────────────────────────────────────
+# Sending Notifications
+# ───────────────────────────────────────────────
 async def send_push_notification(
     token: str, title: str, body: str, data: dict = None
 ) -> bool:
@@ -80,6 +83,9 @@ async def notify_user(
     return await send_push_notification(token_data.token, title, body, data)
 
 
+# ───────────────────────────────────────────────
+# Token Management
+# ───────────────────────────────────────────────
 async def register_fcm_token(
     data: FCMTokenRegister, user_id: UUID, supabase: AsyncClient
 ) -> FCMTokenResponse:

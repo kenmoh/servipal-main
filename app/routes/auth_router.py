@@ -13,6 +13,15 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 async def signup(
     user_data: UserCreate, request: Request, supabase=Depends(get_supabase_admin_client)
 ):
+    """
+    Register a new user account.
+    
+    Args:
+        user_data (UserCreate): The user registration details.
+        
+    Returns:
+        TokenResponse: Access token and user profile information.
+    """
     logger.info(
         "signup_endpoint_called",
         email=user_data.email,
@@ -25,6 +34,15 @@ async def signup(
 async def login(
     login_data: LoginRequest, request: Request, supabase=Depends(get_supabase_client)
 ):
+    """
+    Authenticate a user and return access token.
+    
+    Args:
+        login_data (LoginRequest): Email and password.
+        
+    Returns:
+        TokenResponse: Access token and user profile information.
+    """
     logger.info("login_endpoint_called", email=login_data.email)
     return await user_service.login_user(login_data, supabase, request)
 

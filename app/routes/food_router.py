@@ -33,7 +33,16 @@ async def list_food_vendors(
     lng: Optional[float] = Query(None, description="Longitude for nearby search"),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Home screen - list of restaurant vendors (nearby if lat/lng provided)"""
+    """
+    List restaurant vendors.
+    
+    Args:
+        lat (float, optional): Latitude for nearby search.
+        lng (float, optional): Longitude for nearby search.
+        
+    Returns:
+        List[VendorCardResponse]: List of vendors.
+    """
     return await food_service.get_food_vendors(supabase, lat, lng)
 
 
@@ -41,7 +50,15 @@ async def list_food_vendors(
 async def get_vendor_menu(
     vendor_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
-    """Vendor detail page with full menu and categories"""
+    """
+    Get vendor details and full menu.
+    
+    Args:
+        vendor_id (UUID): The vendor ID.
+        
+    Returns:
+        VendorDetailResponse: Vendor details including menu categories.
+    """
     return await food_service.get_vendor_detail(vendor_id, supabase)
 
 
@@ -60,7 +77,20 @@ async def add_menu_item_with_images(
     current_profile: dict = Depends(require_user_type([UserType.RESTAURANT_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor adds a new food item with optional images"""
+    """
+    Vendor adds a new food item with optional images.
+    
+    Args:
+        name (str): Item name.
+        description (str, optional): Item description.
+        price (Decimal): Price.
+        category_id (UUID, optional): Menu category ID.
+        sizes (List[str], optional): Available sizes.
+        images (List[UploadFile]): List of image files.
+        
+    Returns:
+        dict: Created item details.
+    """
     logger.info("add_menu_item_endpoint", vendor_id=current_profile["id"], name=name)
     return await food_service.create_food_item_with_images(
         name=name,
@@ -83,7 +113,16 @@ async def update_menu_item(
     current_profile: dict = Depends(require_user_type([UserType.RESTAURANT_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor updates an existing food item"""
+    """
+    Vendor updates an existing food item.
+    
+    Args:
+        item_id (UUID): The item ID.
+        item_data (FoodItemUpdate): Fields to update.
+        
+    Returns:
+        dict: Updated item details.
+    """
     logger.info(
         "update_menu_item_endpoint",
         vendor_id=current_profile["id"],
@@ -101,7 +140,15 @@ async def delete_menu_item(
     current_profile: dict = Depends(require_user_type([UserType.RESTAURANT_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor soft-deletes a food item"""
+    """
+    Vendor soft-deletes a food item.
+    
+    Args:
+        item_id (UUID): The item ID.
+        
+    Returns:
+        dict: Success status.
+    """
     logger.info(
         "delete_menu_item_endpoint",
         vendor_id=current_profile["id"],
@@ -140,7 +187,12 @@ async def initiate_food_payment_endpoint(
 ):
     """
     Customer initiates food order payment.
-    Validates items, calculates total, returns Flutterwave RN SDK data.
+    
+    Args:
+        data (CheckoutRequest): Order details including items.
+        
+    Returns:
+        dict: Payment initiation response (Flutterwave).
     """
     logger.info(
         "initiate_food_payment_endpoint",
@@ -160,7 +212,16 @@ async def vendor_food_order_action_endpoint(
     current_profile: dict = Depends(require_user_type([UserType.RESTAURANT_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor accepts or rejects a food order"""
+    """
+    Vendor accepts or rejects a food order.
+    
+    Args:
+        order_id (UUID): The order ID.
+        action_data (Literal['accept', 'reject']): The action.
+        
+    Returns:
+        dict: Action result.
+    """
     logger.info(
         "vendor_food_order_action_endpoint", order_id=str(order_id), action=action_data
     )
@@ -179,7 +240,15 @@ async def vendor_mark_ready_endpoint(
     current_profile: dict = Depends(require_user_type([UserType.RESTAURANT_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor marks food order as ready for pickup/delivery"""
+    """
+    Vendor marks food order as ready for pickup/delivery.
+    
+    Args:
+        order_id (UUID): The order ID.
+        
+    Returns:
+        dict: Updated order status.
+    """
     return await food_service.vendor_mark_food_order_ready(
         order_id, current_profile["id"], supabase=supabase
     )
@@ -192,7 +261,16 @@ async def customer_confirm_food_endpoint(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Customer confirms receipt of food order → releases payment to vendor"""
+    """
+    Customer confirms receipt of food order.
+    Releases payment to vendor.
+    
+    Args:
+        order_id (UUID): The order ID.
+        
+    Returns:
+        dict: Confirmation result.
+    """
     logger.info(
         "customer_confirm_food_endpoint",
         order_id=str(order_id),

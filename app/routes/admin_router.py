@@ -59,7 +59,21 @@ async def list_users(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """List all users with filtering and pagination"""
+    """
+    List all users with filtering and pagination.
+    
+    Args:
+        user_type (UserType, optional): Filter by user type.
+        is_verified (bool, optional): Filter by verification status.
+        is_blocked (bool, optional): Filter by blocked status.
+        account_status (str, optional): Filter by account status.
+        search (str, optional): Search term.
+        created_from (str, optional): Start date.
+        created_to (str, optional): End date.
+        
+    Returns:
+        UsersListResponse: List of users.
+    """
     logger.info("admin_list_users", admin_id=current_profile["id"])
 
     filters = UserFilterParams(
@@ -83,7 +97,15 @@ async def get_user(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Get detailed user information"""
+    """
+    Get detailed user information.
+    
+    Args:
+        user_id (UUID): The user ID.
+        
+    Returns:
+        AdminUserResponse: User details.
+    """
     logger.info("admin_get_user", admin_id=current_profile["id"], user_id=str(user_id))
     return await admin_service.get_user_details(user_id, admin_client)
 
@@ -96,7 +118,16 @@ async def update_user(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Update user profile (admin)"""
+    """
+    Update user profile (admin).
+    
+    Args:
+        user_id (UUID): The user ID.
+        updates (AdminUserUpdate): Fields to update.
+        
+    Returns:
+        AdminUserResponse: Updated user.
+    """
     logger.info(
         "admin_update_user", admin_id=current_profile["id"], user_id=str(user_id)
     )
@@ -112,7 +143,15 @@ async def block_user(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Block a user"""
+    """
+    Block a user.
+    
+    Args:
+        user_id (UUID): The user ID.
+        
+    Returns:
+        dict: Success status.
+    """
     logger.info(
         "admin_block_user", admin_id=current_profile["id"], user_id=str(user_id)
     )
@@ -128,7 +167,15 @@ async def unblock_user(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Unblock a user"""
+    """
+    Unblock a user.
+    
+    Args:
+        user_id (UUID): The user ID.
+        
+    Returns:
+        dict: Success status.
+    """
     logger.info(
         "admin_unblock_user", admin_id=current_profile["id"], user_id=str(user_id)
     )
@@ -146,7 +193,17 @@ async def verify_user(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Verify or unverify a user (vendor/rider)"""
+    """
+    Verify or unverify a user (vendor/rider).
+    
+    Args:
+        user_id (UUID): The user ID.
+        verified (bool): Verification status.
+        reason (str, optional): Reason for action.
+        
+    Returns:
+        dict: Success status.
+    """
     logger.info(
         "admin_verify_user",
         admin_id=current_profile["id"],
@@ -182,7 +239,20 @@ async def list_orders(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """List all orders with filtering and pagination"""
+    """
+    List all orders with filtering and pagination.
+    
+    Args:
+        order_type (str, optional): Filter by order type.
+        status (str, optional): Filter by status.
+        payment_status (str, optional): Filter by payment status.
+        customer_id (UUID, optional): Filter by customer.
+        vendor_id (UUID, optional): Filter by vendor.
+        rider_id (UUID, optional): Filter by rider.
+        
+    Returns:
+        OrdersListResponse: List of orders.
+    """
     logger.info("admin_list_orders", admin_id=current_profile["id"])
 
     filters = OrderFilterParams(
@@ -225,7 +295,20 @@ async def list_transactions(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """List all transactions with filtering and pagination"""
+    """
+    List all transactions with filtering and pagination.
+    
+    Args:
+        transaction_type (str, optional): Filter by type.
+        status (str, optional): Filter by status.
+        from_user_id (UUID, optional): Filter by sender.
+        to_user_id (UUID, optional): Filter by recipient.
+        min_amount (float, optional): Min amount.
+        max_amount (float, optional): Max amount.
+        
+    Returns:
+        TransactionsListResponse: List of transactions.
+    """
     logger.info("admin_list_transactions", admin_id=current_profile["id"])
 
     from decimal import Decimal
@@ -258,7 +341,12 @@ async def list_wallets(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """List all wallets with pagination"""
+    """
+    List all wallets with pagination.
+    
+    Returns:
+        WalletsListResponse: List of wallets.
+    """
     logger.info("admin_list_wallets", admin_id=current_profile["id"])
 
     pagination = PaginationParams(page=page, page_size=page_size)
@@ -273,7 +361,15 @@ async def adjust_wallet(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Adjust wallet balance (admin only)"""
+    """
+    Adjust wallet balance (admin only).
+    
+    Args:
+        adjustment (WalletAdjustmentRequest): Adjustment details.
+        
+    Returns:
+        AdminWalletResponse: Updated wallet.
+    """
     logger.info(
         "admin_adjust_wallet",
         admin_id=current_profile["id"],
@@ -294,7 +390,12 @@ async def get_dashboard_stats(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """Get overall dashboard statistics"""
+    """
+    Get overall dashboard statistics.
+    
+    Returns:
+        DashboardStatsResponse: Stats.
+    """
     logger.info("admin_dashboard_stats", admin_id=current_profile["id"])
     return await admin_service.get_dashboard_stats(admin_client)
 
@@ -319,7 +420,17 @@ async def list_audit_logs(
     current_profile: dict = Depends(require_admin),
     admin_client: AsyncClient = Depends(get_supabase_admin_client),
 ):
-    """List audit logs with filtering and pagination"""
+    """
+    List audit logs with filtering and pagination.
+    
+    Args:
+        entity_type (str, optional): Filter by entity.
+        action (str, optional): Filter by action.
+        actor_id (UUID, optional): Filter by actor.
+        
+    Returns:
+        AuditLogsListResponse: List of logs.
+    """
     logger.info("admin_list_audit_logs", admin_id=current_profile["id"])
 
     filters = AuditLogFilterParams(

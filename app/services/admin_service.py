@@ -8,9 +8,9 @@ from app.schemas.admin_schemas import *
 from app.schemas.user_schemas import UserType
 from app.utils.audit import log_audit_event
 
-# ========================
+# ───────────────────────────────────────────────
 # USER MANAGEMENT
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def list_users(
@@ -355,9 +355,9 @@ async def verify_user(
         raise HTTPException(status_code=500, detail=f"Failed to verify user: {str(e)}")
 
 
-# ========================
+# ───────────────────────────────────────────────
 # HELPER FUNCTIONS
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def get_user_order_stats(
@@ -452,9 +452,9 @@ async def get_user_wallet_stats(
         return {"balance": 0, "total_spent": 0, "total_earned": 0, "error": str(e)}
 
 
-# ========================
+# ───────────────────────────────────────────────
 # ORDER MANAGEMENT
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def list_orders(
@@ -618,9 +618,9 @@ async def list_orders(
         raise HTTPException(status_code=500, detail=f"Failed to list orders: {str(e)}")
 
 
-# ========================
+# ───────────────────────────────────────────────
 # TRANSACTION MANAGEMENT
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def list_transactions(
@@ -694,9 +694,9 @@ async def list_transactions(
         )
 
 
-# ========================
+# ───────────────────────────────────────────────
 # WALLET MANAGEMENT
-# ========================
+# ───────────────────────────────────────────────
 
 
 async def list_wallets(

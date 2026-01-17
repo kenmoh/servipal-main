@@ -3,6 +3,9 @@ from supabase import AsyncClient
 from app.schemas.review_schemas import *
 
 
+# ───────────────────────────────────────────────
+# Create Review
+# ───────────────────────────────────────────────
 async def create_review(
     order_id: UUID,
     order_type: str,
@@ -126,6 +129,9 @@ async def create_review(
         )
 
 
+# ───────────────────────────────────────────────
+# Get Dispatch Rating
+# ───────────────────────────────────────────────
 async def get_dispatch_rating(dispatch_id: UUID, supabase: AsyncClient) -> dict:
     resp = await supabase.rpc(
         "get_dispatch_rating", {"dispatch_user_id": str(dispatch_id)}
@@ -144,6 +150,9 @@ async def get_dispatch_rating(dispatch_id: UUID, supabase: AsyncClient) -> dict:
     }
 
 
+# ───────────────────────────────────────────────
+# Get Reviews
+# ───────────────────────────────────────────────
 async def get_reviews_for_entity(
     entity_id: UUID,
     entity_type: str,  # RIDER, VENDOR, DISPATCH

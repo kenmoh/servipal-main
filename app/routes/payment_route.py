@@ -21,8 +21,16 @@ async def flutterwave_webhook(
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
     """
-    Flutterwave webhook handler.
-    Verifies signature, checks idempotency, queues processing in the background.
+    Handle Flutterwave payment webhooks.
+    
+    Verifies signature, checks idempotency, and queues processing in background.
+    
+    Args:
+        request (Request): The raw request.
+        verif_hash (str): The verification hash header.
+        
+    Returns:
+        dict: Processing status.
     """
     # 1. Verify webhook signature (Flutterwave sends verif-hash header)
     if verif_hash != settings.FLW_SECRET_HASH:

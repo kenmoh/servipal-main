@@ -21,6 +21,10 @@ async def upload_to_supabase_storage(
 
     Returns:
         Public URL of uploaded file
+        :param folder:
+        :param bucket:
+        :param file:
+        :param supabase:
     """
     try:
         # 1. Validate file

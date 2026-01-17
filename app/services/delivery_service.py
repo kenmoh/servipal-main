@@ -29,7 +29,9 @@ from decimal import Decimal
 from app.services.notification_service import notify_user
 
 
+# ───────────────────────────────────────────────
 # 1. Initiate Delivery (Pay First — No Rider Yet)
+# ───────────────────────────────────────────────
 async def initiate_delivery_payment(
     data: PackageDeliveryCreate,
     sender_id: UUID,
@@ -124,7 +126,9 @@ async def initiate_delivery_payment(
         )
 
 
+# ───────────────────────────────────────────────
 # 3. Assign Rider After Payment (RPC already updated earlier)
+# ───────────────────────────────────────────────
 async def assign_rider_to_order(
     order_id: UUID, data: AssignRiderRequest, sender_id: UUID, supabase: AsyncClient
 ) -> AssignRiderResponse:
@@ -186,7 +190,9 @@ async def assign_rider_to_order(
         )
 
 
+# ───────────────────────────────────────────────
 # 4. Rider Delivery Action (accept/decline)
+# ───────────────────────────────────────────────
 async def rider_delivery_action(
     order_id: UUID, data: DeliveryAction, rider_id: UUID, supabase: AsyncClient
 ) -> DeliveryActionResponse:
@@ -236,7 +242,9 @@ async def rider_delivery_action(
         )
 
 
+# ───────────────────────────────────────────────
 # 5. Rider Pickup
+# ───────────────────────────────────────────────
 async def rider_picked_up(
     order_id: UUID,
     rider_id: UUID,
@@ -311,7 +319,9 @@ async def rider_picked_up(
         raise HTTPException(500, f"Pickup failed: {str(e)}")
 
 
+# ───────────────────────────────────────────────
 # 6. Rider Confirm Delivery (Delivered)
+# ───────────────────────────────────────────────
 async def rider_confirm_delivery(
     order_id: UUID,
     rider_id: UUID,
@@ -376,7 +386,9 @@ async def rider_confirm_delivery(
         )
 
 
+# ───────────────────────────────────────────────
 # 7. Sender Confirm Receipt (Release Payment)
+# ───────────────────────────────────────────────
 async def sender_confirm_receipt(
     order_id: UUID,
     sender_id: UUID,
@@ -494,7 +506,9 @@ async def sender_confirm_receipt(
         )
 
 
+# ───────────────────────────────────────────────
 # 8. Cancel Delivery
+# ───────────────────────────────────────────────
 async def cancel_delivery(
     order_id: UUID,
     data: DeliveryCancelRequest,
@@ -564,7 +578,9 @@ async def cancel_delivery(
         raise HTTPException(500, f"Cancel failed: {str(e)}")
 
 
+# ───────────────────────────────────────────────
 # 9. Get Delivery Orders
+# ───────────────────────────────────────────────
 async def get_delivery_orders(
     current_user_id: UUID,
     is_admin: bool,

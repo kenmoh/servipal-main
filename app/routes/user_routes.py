@@ -24,6 +24,15 @@ async def create_rider(
     dispatch_user=Depends(require_user_type([UserType.DISPATCH])),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
 ):
+    """
+    Dispatch owner creates a new rider account.
+    
+    Args:
+        data (RiderCreateByDispatch): Rider details (phone, name, etc.).
+        
+    Returns:
+        UserProfileResponse: The created rider's profile.
+    """
     logger.info(
         "create_rider_requested", dispatch_id=current_user["id"], rider_phone=data.phone
     )
@@ -37,6 +46,12 @@ async def get_my_profile(
     profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Get the current user's profile.
+    
+    Returns:
+        UserProfileResponse: User profile details.
+    """
     logger.debug("get_profile_requested", user_id=profile["id"])
     return await get_user_profile(profile["id"], supabase)
 
@@ -48,6 +63,15 @@ async def update_profile(
     profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Update the current user's profile.
+    
+    Args:
+        data (ProfileUpdate): Fields to update.
+        
+    Returns:
+        UserProfileResponse: Updated profile.
+    """
     logger.info(
         "update_profile_requested",
         user_id=profile["id"],
@@ -63,6 +87,12 @@ async def get_my_riders(
     current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Get all riders managed by the current dispatch user (raw RPC call).
+    
+    Returns:
+        list: List of riders.
+    """
     resp = await supabase.rpc(
         "get_my_riders", {"dispatch_user_id": current_profile["id"]}
     ).execute()
@@ -130,6 +160,15 @@ async def view_rider_earnings(
     current_profile: dict = Depends(require_user_type([UserType.DISPATCH])),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    View earnings for a specific rider.
+    
+    Args:
+        rider_id (UUID): The ID of the rider.
+        
+    Returns:
+        RiderEarningsResponse: Earnings data.
+    """
     return await get_rider_earnings(rider_id, current_profile["id"], supabase)
 
 
@@ -142,6 +181,12 @@ async def vendor_earnings_dashboard(
     ),
     supabase=Depends(get_supabase_client),
 ):
+    """
+    Get earnings dashboard for vendors and dispatch.
+    
+    Returns:
+        dict: Earnings summary and details.
+    """
     return await get_vendor_earnings(current_profile["id"], supabase)
 
 
@@ -152,6 +197,15 @@ async def upload_profile_pic(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Upload a profile picture.
+    
+    Args:
+        file (UploadFile): The image file.
+        
+    Returns:
+        dict: Success status and image URL.
+    """
     logger.info(
         "profile_image_upload_requested",
         user_id=current_profile["id"],
@@ -176,6 +230,15 @@ async def upload_backdrop(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Upload a backdrop/cover image.
+    
+    Args:
+        file (UploadFile): The image file.
+        
+    Returns:
+        dict: Success status and image URL.
+    """
     logger.info(
         "backdrop_image_upload_requested",
         user_id=current_profile["id"],
@@ -212,6 +275,12 @@ async def set_online_status(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
+    """
+    Toggle the user's online/offline status (for riders/vendors).
+    
+    Returns:
+        dict: New status.
+    """
     return await toggle_online_status(current_profile["id"], supabase)
 
 

@@ -43,7 +43,23 @@ async def create_product_item(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Any logged-in user can list a product for sale (with images upload)"""
+    """
+    List a new product for sale.
+    
+    Args:
+        name (str): Product name.
+        description (str, optional): Product description.
+        price (Decimal): Price.
+        product_type (ProductType): Type of product.
+        stock (int): Stock quantity.
+        sizes (str, optional): Comma-separated sizes.
+        colors (str, optional): Comma-separated colors.
+        category_id (UUID, optional): Category ID.
+        images (List[UploadFile]): Product images.
+        
+    Returns:
+        ProductItemResponse: Created product details.
+    """
 
     parsed_sizes = [s.strip() for s in sizes.split(",")] if sizes else []
     parsed_colors = [c.strip() for c in colors.split(",")] if colors else []
@@ -81,7 +97,15 @@ async def create_product_item(
 async def get_product_item(
     item_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
-    """Public: View a single product detail"""
+    """
+    View a single product detail.
+    
+    Args:
+        item_id (UUID): The product ID.
+        
+    Returns:
+        ProductItemResponse: Product details.
+    """
     return await product_service.get_product_item(item_id, supabase)
 
 
@@ -90,7 +114,12 @@ async def get_my_products(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Seller views their own listed products"""
+    """
+    Seller views their own listed products.
+    
+    Returns:
+        List[ProductItemResponse]: List of products.
+    """
     return await product_service.get_my_product_items(current_profile["id"], supabase)
 
 
@@ -101,7 +130,16 @@ async def update_product_item(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Seller updates their own product"""
+    """
+    Seller updates their own product.
+    
+    Args:
+        item_id (UUID): The product ID.
+        data (ProductItemUpdate): Fields to update.
+        
+    Returns:
+        ProductItemResponse: Updated product.
+    """
     return await product_service.update_product_item(
         item_id, data, current_profile["id"], supabase
     )
@@ -113,7 +151,15 @@ async def delete_product_item(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Seller soft-deletes their own product"""
+    """
+    Seller soft-deletes their own product.
+    
+    Args:
+        item_id (UUID): The product ID.
+        
+    Returns:
+        dict: Success status.
+    """
     return await product_service.delete_product_item(
         item_id, current_profile["id"], supabase
     )
@@ -131,7 +177,12 @@ async def initiate_product_payment(
 ):
     """
     Customer initiates payment for a single product + quantity.
-    Returns Flutterwave RN SDK payload.
+    
+    Args:
+        data (ProductOrderCreate): Order details.
+        
+    Returns:
+        ProductOrderResponse: Payment details (Flutterwave).
     """
     return await product_service.initiate_product_payment(
         data, current_profile["id"], customer_info, supabase
@@ -154,7 +205,16 @@ async def vendor_product_order_action(
         )
     ),
 ):
-    """Vendor accepts or rejects the product order"""
+    """
+    Vendor accepts or rejects the product order.
+    
+    Args:
+        order_id (UUID): The order ID.
+        data (ProductVendorOrderAction): Action data.
+        
+    Returns:
+        ProductVendorOrderActionResponse: Action result.
+    """
     return await product_service.vendor_product_order_action(
         order_id, data, current_profile["id"], supabase
     )
@@ -172,7 +232,15 @@ async def vendor_mark_product_ready(
         )
     ),
 ):
-    """Vendor marks product order as ready for pickup/delivery"""
+    """
+    Vendor marks product order as ready for pickup/delivery.
+    
+    Args:
+        order_id (UUID): The order ID.
+        
+    Returns:
+        ProductVendorMarkReadyResponse: Updated status.
+    """
     return await product_service.vendor_mark_product_ready(
         order_id, current_profile["id"], supabase
     )
@@ -189,7 +257,16 @@ async def customer_confirm_product_order(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Customer confirms receipt → stock reduced, total_sold increased, payment released"""
+    """
+    Customer confirms receipt.
+    Stock reduced, total_sold increased, payment released.
+    
+    Args:
+        order_id (UUID): The order ID.
+        
+    Returns:
+        ProductCustomerConfirmResponse: Confirmation result.
+    """
     return await product_service.customer_confirm_product_order(
         order_id, current_profile["id"], supabase
     )

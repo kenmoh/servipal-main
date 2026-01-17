@@ -45,7 +45,7 @@ class PayWithWalletRequest(BaseModel):
 
 class CustomerInfo(BaseModel):
     email: str = Field(..., description="Customer's email address")
-    phone_number: str = Field(..., description="Customer's phone number (E.164 format)")
+    # phone_number: str = Field(..., description="Customer's phone number (E.164 format)")
     name: str = Field(..., description="Customer's full name or display name")
 
 

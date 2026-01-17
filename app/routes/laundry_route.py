@@ -32,7 +32,16 @@ async def list_laundry_vendors(
     lng: Optional[float] = Query(None),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """List laundry vendors (nearby if lat/lng provided)"""
+    """
+    List laundry vendors.
+    
+    Args:
+        lat (float, optional): Latitude for nearby search.
+        lng (float, optional): Longitude for nearby search.
+        
+    Returns:
+        List[VendorResponse]: List of vendors.
+    """
     return await laundry_service.get_laundry_vendors(supabase, lat, lng)
 
 
@@ -40,7 +49,15 @@ async def list_laundry_vendors(
 async def get_laundry_vendor_detail(
     vendor_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
 ):
-    """Get laundry vendor details and menu"""
+    """
+    Get laundry vendor details and menu.
+    
+    Args:
+        vendor_id (UUID): The vendor ID.
+        
+    Returns:
+        LaundryVendorDetailResponse: Vendor details.
+    """
     return await laundry_service.get_laundry_vendor_detail(vendor_id, supabase)
 
 
@@ -51,7 +68,15 @@ async def initiate_laundry_payment_endpoint(
     customer_info: dict = Depends(get_customer_contact_info),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Initiate laundry payment — returns Flutterwave RN SDK data"""
+    """
+    Initiate laundry payment.
+    
+    Args:
+        data (LaundryOrderCreate): Order details.
+        
+    Returns:
+        dict: Flutterwave RN SDK payment data.
+    """
     return await laundry_service.initiate_laundry_payment(
         data, current_profile["id"], customer_info, supabase
     )
@@ -64,7 +89,16 @@ async def vendor_laundry_order_action_endpoint(
     current_profile: dict = Depends(require_user_type([UserType.LAUNDRY_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor accepts or rejects laundry order"""
+    """
+    Vendor accepts or rejects laundry order.
+    
+    Args:
+        order_id (UUID): The order ID.
+        data (VendorOrderAction): The action (accept/reject).
+        
+    Returns:
+        VendorOrderActionResponse: Action result.
+    """
     return await laundry_service.vendor_laundry_order_action(
         order_id, data, current_profile["id"], supabase
     )
@@ -78,7 +112,15 @@ async def vendor_mark_laundry_ready_endpoint(
     current_profile: dict = Depends(require_user_type([UserType.LAUNDRY_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor marks laundry order as ready"""
+    """
+    Vendor marks laundry order as ready.
+    
+    Args:
+        order_id (UUID): The order ID.
+        
+    Returns:
+        LaundryVendorMarkReadyResponse: Updated status.
+    """
     return await laundry_service.vendor_mark_laundry_order_ready(
         order_id, current_profile["id"], supabase
     )
@@ -93,7 +135,16 @@ async def customer_confirm_laundry_receipt(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Customer confirms receipt — releases payment to vendor"""
+    """
+    Customer confirms receipt of laundry order.
+    Releases payment to vendor.
+    
+    Args:
+        order_id (UUID): The order ID.
+        
+    Returns:
+        LaundryCustomerConfirmResponse: Confirmation result.
+    """
     from app.config.logging import logger
 
     logger.info(
@@ -111,7 +162,12 @@ async def get_my_laundry_menu(
     current_profile: dict = Depends(require_user_type([UserType.LAUNDRY_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor views their own laundry menu"""
+    """
+    Vendor views their own laundry menu.
+    
+    Returns:
+        dict: List of laundry items.
+    """
     resp = (
         await supabase.table("laundry_items")
         .select("*")
@@ -131,7 +187,18 @@ async def add_laundry_item_with_images(
     current_profile: dict = Depends(require_user_type([UserType.LAUNDRY_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor adds a new laundry item with images"""
+    """
+    Vendor adds a new laundry item with images.
+    
+    Args:
+        name (str): Item name.
+        description (str, optional): item description.
+        price (Decimal): Price.
+        images (List[UploadFile]): Images.
+        
+    Returns:
+        dict: Created item details.
+    """
     return await laundry_service.create_laundry_item_with_images(
         name=name,
         description=description,
@@ -149,7 +216,16 @@ async def update_laundry_item_endpoint(
     current_profile: dict = Depends(require_user_type([UserType.LAUNDRY_VENDOR])),
     supabase: AsyncClient = Depends(get_supabase_client),
 ):
-    """Vendor updates a laundry item"""
+    """
+    Vendor updates a laundry item.
+    
+    Args:
+        item_id (UUID): The item ID.
+        data (LaundryItemUpdate): Fields to update.
+        
+    Returns:
+        LaundryItemDetailResponse: Updated item.
+    """
     return await laundry_service.update_laundry_item(
         item_id, data, current_profile["id"], supabase
     )

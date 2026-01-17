@@ -20,7 +20,9 @@ from app.utils.dispute_helpers import (
 )
 
 
-# Create a dispute (buyer only, for now)
+# ───────────────────────────────────────────────
+# Create Dispute (Buyer Only)
+# ───────────────────────────────────────────────
 async def create_dispute(
     data: DisputeCreate, initiator_id: UUID, supabase: AsyncClient
 ):
@@ -75,7 +77,9 @@ async def create_dispute(
     return resp.data[0]
 
 
-# Post message to dispute
+# ───────────────────────────────────────────────
+# Post Message
+# ───────────────────────────────────────────────
 async def post_dispute_message(
     dispute_id: UUID, data: DisputeMessageCreate, sender_id: UUID, supabase: AsyncClient
 ):
@@ -130,7 +134,9 @@ async def post_dispute_message(
     return resp.data[0]
 
 
-# Resolve dispute (admin only)
+# ───────────────────────────────────────────────
+# Resolve Dispute (Admin Only)
+# ───────────────────────────────────────────────
 async def resolve_dispute(
     dispute_id: UUID, data: DisputeResolve, admin_id: UUID, supabase: AsyncClient
 ):
@@ -220,6 +226,9 @@ async def resolve_dispute(
     return {"success": True, "message": "Dispute resolved"}
 
 
+# ───────────────────────────────────────────────
+# Get My Disputes
+# ───────────────────────────────────────────────
 async def get_my_disputes(
     current_user_id: UUID, supabase: AsyncClient
 ) -> List[DisputeResponse]:
@@ -293,6 +302,9 @@ async def get_my_disputes(
         )
 
 
+# ───────────────────────────────────────────────
+# Get Dispute Detail
+# ───────────────────────────────────────────────
 async def get_dispute_detail(
     dispute_id: UUID, supabase: AsyncClient
 ) -> DisputeResponse:
