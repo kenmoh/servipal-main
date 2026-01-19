@@ -28,3 +28,19 @@ async def delete_pending(key: str):
         await redis.delete(key)
     except Exception as e:
         raise HTTPException(500, f"Redis delete failed: {str(e)}")
+
+
+async def cache_data(key: str, data: str, expire: int = 86400):
+    """Cache data in Redis with expiration"""
+    try:
+        await redis.set(key, data, ex=expire)
+    except Exception as e:
+        raise HTTPException(500, f"Redis cache failed: {str(e)}")
+
+
+async def get_cached_data(key: str) -> str | None:
+    """Get cached data from Redis"""
+    try:
+        return await redis.get(key)
+    except Exception as e:
+        raise HTTPException(500, f"Redis get failed: {str(e)}")

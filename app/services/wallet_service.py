@@ -3,6 +3,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 import uuid
+from typing import Optional
 
 from supabase import AsyncClient
 from app.schemas.wallet_schema import (
@@ -29,6 +30,7 @@ from datetime import datetime
 from app.utils.audit import log_audit_event
 from app.config.logging import logger
 from supabase import AsyncClient
+from app.schemas.wallet_schema import WithdrawResponse
 
 
 # ───────────────────────────────────────────────

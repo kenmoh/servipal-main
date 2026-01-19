@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 from uuid import UUID
+from decimal import Decimal
 from typing import List
 from datetime import datetime
 from supabase import AsyncClient
@@ -17,6 +18,8 @@ from app.utils.dispute_helpers import (
     is_admin,
     refund_escrow,
     release_escrow,
+    release_escrow_funds_for_dispute,
+    get_escrow_agreement,
 )
 from app.services.notification_service import notify_user
 
@@ -182,34 +185,55 @@ async def resolve_dispute(
     order = await get_order(
         dispute.data["order_id"], dispute.data["order_type"], supabase
     )
-    tx = (
-        await supabase.table("transactions")
-        .select("id, amount, from_user_id, to_user_id")
-        .eq("order_id", order["id"])
-        .single()
-        .execute()
-    )
-    amount = tx.data["amount"]
-
-    if data.resolution == "BUYER_FAVOR":
-        # Full refund to buyer
-        await refund_escrow(tx.data["from_user_id"], amount, supabase)
-        await update_order_status(
-            order["id"], dispute.data["order_type"], "CANCELLED", supabase
+    if dispute.data["order_type"] == "ESCROW_AGREEMENT":
+        # For escrow, handle differently
+        agreement = await get_escrow_agreement(dispute.data["order_id"], supabase)
+        total_amount = Decimal(str(agreement["amount"])) + Decimal(
+            str(agreement["commission_amount"])
         )
+        net_amount = Decimal(str(agreement["amount"]))
 
-    elif data.resolution == "SELLER_FAVOR":
-        # Full release to seller
-        await release_escrow(
-            tx.data["from_user_id"], tx.data["to_user_id"], amount, supabase
+        if data.resolution == "BUYER_FAVOR":
+            # Refund to initiator
+            await refund_escrow(agreement["initiator_id"], total_amount, supabase)
+            await update_order_status(
+                order["id"], dispute.data["order_type"], "CANCELLED", supabase
+            )
+        elif data.resolution == "SELLER_FAVOR":
+            # Release funds to recipients
+            await release_escrow_funds_for_dispute(order["id"], supabase)
+            await update_order_status(
+                order["id"], dispute.data["order_type"], "COMPLETED", supabase
+            )
+    else:
+        tx = (
+            await supabase.table("transactions")
+            .select("id, amount, from_user_id, to_user_id")
+            .eq("order_id", order["id"])
+            .single()
+            .execute()
         )
-        await update_order_status(
-            order["id"], dispute.data["order_type"], "COMPLETED", supabase
-        )
+        amount = tx.data["amount"]
 
-    elif data.resolution == "COMPROMISE":
-        # Partial refund (add split_amount to data later)
-        pass  # Implement split if needed
+        if data.resolution == "BUYER_FAVOR":
+            # Full refund to buyer
+            await refund_escrow(tx.data["from_user_id"], amount, supabase)
+            await update_order_status(
+                order["id"], dispute.data["order_type"], "CANCELLED", supabase
+            )
+
+        elif data.resolution == "SELLER_FAVOR":
+            # Full release to seller
+            await release_escrow(
+                tx.data["from_user_id"], tx.data["to_user_id"], amount, supabase
+            )
+            await update_order_status(
+                order["id"], dispute.data["order_type"], "COMPLETED", supabase
+            )
+
+        elif data.resolution == "COMPROMISE":
+            # Partial refund (add split_amount to data later)
+            pass  # Implement split if needed
 
     # Log audit
     await log_audit_event(

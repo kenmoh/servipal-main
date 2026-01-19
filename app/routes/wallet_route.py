@@ -5,6 +5,8 @@ from app.schemas.wallet_schema import (
     TopUpRequest,
     PayWithWalletRequest,
     WalletTopUpInitiationResponse,
+    WithdrawResponse,
+    WithdrawAllRequest,
 )
 from app.services import wallet_service
 from app.dependencies.auth import get_current_profile
@@ -83,7 +85,7 @@ async def pay_with_my_wallet(
 
 
 @router.post("/withdraw-all", response_model=WithdrawResponse)
-async def withdraw_all_balance_endpoint(
+async def withdraw_all_balance(
     data: WithdrawAllRequest,
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
@@ -93,6 +95,6 @@ async def withdraw_all_balance_endpoint(
     Withdraw ALL available balance to user's bank via Flutterwave Transfer.
     Funds deducted immediately, transfer attempted instantly.
     """
-    return await withdraw_all_balance(
+    return await wallet_service.withdraw_all_balance(
         data=data, user_id=current_profile["id"], supabase=supabase, request=request
     )

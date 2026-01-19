@@ -22,12 +22,13 @@ class Settings(BaseSettings):
     FLW_PUBLIC_KEY: Optional[str] = None
     FLW_SECRET_KEY: Optional[str] = None
     FLW_SECRET_HASH: Optional[str] = None
-    FLUTTERWAVE_PUBLIC_KEY: Optional[str] = None
+    FLUTTERWAVE_PUBLIC_KEY: Optional[str] = "Kenneth-TEST-1234567"
 
     # SUPABASE
     SUPABASE_URL: str = os.getenv("SUPABASE_URL")
     SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY")
     SUPABASE_SECRET_KEY: str = os.getenv("SUPABASE_SECRET_KEY")
+    SUPABASE_STORAGE_BUCKET_URL: str = os.getenv("SUPABASE_STORAGE_BUCKET_URL")
 
     # REDIS
     REDIS_URL: str = "redis://localhost:6379/0"

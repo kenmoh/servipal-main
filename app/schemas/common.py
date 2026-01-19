@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from decimal import Decimal
 from typing import Optional, Literal
@@ -38,8 +38,8 @@ class VendorResponse(BaseModel):
 
 class PaymentCustomerInfo(BaseModel):
     email: str
-    phone_number: str
-    name: str
+    phone_number: str = Field(..., pattern=r"^\+\d{10,15}$")
+    full_name: str | None = None
 
 
 class PaymentCustomization(BaseModel):
@@ -49,9 +49,12 @@ class PaymentCustomization(BaseModel):
 
 class PaymentInitializationResponse(BaseModel):
     tx_ref: str
-    amount: Decimal
+    amount: Decimal = Field(
+        description="Amount to be paid", default=Decimal("0.00"), decimal_places=2
+    )
     public_key: str
     currency: str
+    distance_km: str
     customer: PaymentCustomerInfo
     customization: PaymentCustomization
     message: str

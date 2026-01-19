@@ -6,6 +6,7 @@ from app.utils.audit import log_audit_event
 from typing import Optional
 from fastapi import Request
 from decimal import Decimal
+from app.utils.payment import verify_transaction_tx_ref
 
 
 # ───────────────────────────────────────────────
@@ -19,6 +20,11 @@ async def process_successful_delivery_payment(
     request: Optional[Request] = None,
 ):
     logger.info("processing_delivery_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return
+
     pending_key = f"pending_delivery_{tx_ref}"
     pending = await get_pending(pending_key)
 
@@ -152,6 +158,12 @@ async def process_successful_food_payment(
     - Cleans up Redis
     """
     logger.info("processing_food_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return
+
     pending_key = f"pending_food_{tx_ref}"
     pending = await get_pending(pending_key)
 
@@ -320,6 +332,11 @@ async def process_successful_topup_payment(
     request: Optional[Request] = None,
 ):
     logger.info("processing_topup_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return
     pending_key = f"pending_topup_{tx_ref}"
     pending = await get_pending(pending_key)
 
@@ -428,6 +445,15 @@ async def process_successful_topup_payment(
 async def process_successful_product_payment(
     tx_ref: str, paid_amount: float, flw_ref: str, supabase: AsyncClient
 ):
+    
+
+    logger.info("processing_product_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return
+    
     pending_key = f"pending_product_{tx_ref}"
     pending = await get_pending(pending_key)
 
@@ -536,6 +562,13 @@ async def process_successful_laundry_payment(
     - Logs platform commission
     - Creates transaction record
     """
+    logger.info("processing_laundry_payment", tx_ref=tx_ref, paid_amount=paid_amount)
+
+    verified = await verify_transaction_tx_ref(tx_ref)
+    if not verified or verified.get("status") != "success":
+        logger.error("delivery_payment_verification_failed", tx_ref=tx_ref)
+        return
+    
     pending_key = f"pending_laundry_{tx_ref}"
     pending = await get_pending(pending_key)
 

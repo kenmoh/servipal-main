@@ -18,7 +18,11 @@ class DeliveryStatus(str, Enum):
 
 
 class PackageDeliveryCreate(BaseModel):
-    receiver_phone: str = Field(..., pattern=r"^\+\d{10,15}$")
+    receiver_phone: str = Field(
+        ...,
+        pattern=r"^\+234[789]\d{9}$",
+        description="Nigerian phone number in format +234XXXXXXXXXX",
+    )
     pickup_location: str
     destination: str
     pickup_coordinates: tuple[float, float]

@@ -1,6 +1,5 @@
-from fastapi import UploadFile, HTTPException
+from fastapi import UploadFile, HTTPException, status
 from supabase import AsyncClient
-from app.database.supabase import get_supabase_client
 from uuid import uuid4
 import os
 
@@ -16,25 +15,32 @@ async def upload_to_supabase_storage(
 
     Args:
         file: UploadFile from FastAPI
+        supabase: Supabase async client
         bucket: Storage bucket name (create in Supabase dashboard)
         folder: Subfolder inside bucket
 
     Returns:
         Public URL of uploaded file
-        :param folder:
-        :param bucket:
-        :param file:
-        :param supabase:
     """
     try:
+        # 0. Handle None file
+        if file is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="File is required"
+            )
+
         # 1. Validate file
         if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
             raise HTTPException(
-                status_code=400, detail="Only JPG, PNG, WEBP images allowed"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only JPG, PNG, WEBP images allowed",
             )
 
-        if file.size > 10 * 1024 * 1024:  # 10MB limit
-            raise HTTPException(status_code=400, detail="File too large. Max 10MB")
+        if file.size and file.size > 8 * 1024 * 1024:  # 10MB limit
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File too large. Max 8MB",
+            )
 
         # 2. Read file content
         contents = await file.read()
@@ -45,22 +51,21 @@ async def upload_to_supabase_storage(
         file_path = f"{folder}/{unique_filename}" if folder else unique_filename
 
         # 4. Upload to Supabase Storage
-        upload_resp = supabase.storage.from_(bucket).upload(
+        upload_resp = await supabase.storage.from_(bucket).upload(
             path=file_path,
             file=contents,
             file_options={"content-type": file.content_type, "upsert": False},
         )
 
-        if upload_resp.status_code not in (200, 201):
-            raise HTTPException(status_code=500, detail="Upload to storage failed")
-
-        # 5. Get public URL
-        public_url = supabase.storage.from_(bucket).get_public_url(file_path)
+        # 5. Get public URL - MOVED BEFORE the print statements
+        public_url = await supabase.storage.from_(bucket).get_public_url(file_path)
 
         return public_url
 
+    except HTTPException:
+        raise
     except Exception as e:
         if "Duplicate" in str(e):
             # Rare case — retry with new name
-            return await upload_to_supabase_storage(file, bucket, folder)
+            return await upload_to_supabase_storage(file, supabase, bucket, folder)
         raise HTTPException(status_code=500, detail=f"Storage upload failed: {str(e)}")

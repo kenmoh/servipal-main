@@ -3,10 +3,12 @@ from app.schemas.user_schemas import *
 from fastapi import HTTPException, status, UploadFile, Request
 from uuid import UUID
 from datetime import datetime, timedelta
-from supabase.client import AsyncClient
+from supabase import AsyncClient
 from app.config.logging import logger
 from app.utils.audit import log_audit_event
 from decimal import Decimal
+from app.config.config import redis
+from app.utils.utils import check_login_attempts, record_failed_attempt, reset_login_attempts
 
 # ───────────────────────────────────────────────
 # 1. Signup (Customer / Vendor / Dispatch)
@@ -112,6 +114,10 @@ async def login_user(
     data: LoginRequest, supabase: AsyncClient, request: Optional[Request] = None
 ) -> TokenResponse:
     logger.info("login_attempt", email=data.email)
+    
+    # Check for too many failed attempts
+    await check_login_attempts(data.email, redis)
+    
     try:
         # Try phone first, then email
         credentials = {"password": data.password, "email": data.email}
@@ -137,17 +143,28 @@ async def login_user(
             request=request,
         )
 
+        try:
+            user_profile = UserProfileResponse(**profile_resp.data)
+        except Exception as e:
+            logger.error("profile_parsing_error", data=profile_resp.data, error=str(e))
+            raise HTTPException(status_code=500, detail="Profile data parsing error")
+
+        # Reset login attempts on successful login
+        await reset_login_attempts(data.email, redis)
+
         logger.info("login_success", user_id=session.user.id, email=data.email)
         return TokenResponse(
             access_token=session.session.access_token,
             refresh_token=session.session.refresh_token,
             expires_in=session.session.expires_in,
-            user=UserProfileResponse(**profile_resp.data),
+            user=user_profile,
         )
 
     except Exception as e:
         logger.warning("login_failed", email=data.email, error=str(e))
-        raise HTTPException(status_code=401, detail=f"Invalid credentials. {e}")
+        # Record failed attempt
+        await record_failed_attempt(data.email, redis)
+        raise HTTPException(status_code=401, detail=f"Invalid credentials.")
 
 
 # ───────────────────────────────────────────────
@@ -171,7 +188,7 @@ async def create_rider_by_dispatch(
     # Fetch the dispatcher profile with required fields
     dispatch_profile_resp = (
         await supabase_admin.table("profiles")
-        .select("user_type, business_name, business_address, state")
+        .select("user_type, business_name, business_address, state, business_registration_number")
         .eq("id", current_profile["id"])
         .single()
         .execute()
@@ -182,7 +199,14 @@ async def create_rider_by_dispatch(
     # Security: Only DISPATCH can create riders
     if dispatch_profile["user_type"] != UserType.DISPATCH.value:
         raise HTTPException(
-            status_code=403, detail="Only dispatch users can create riders"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only dispatch users can create riders"
+        )
+    
+    riders = await get_my_riders()
+    # Validation: Limit riders if no business registration number
+    if  dispatch_profile['business_registration_number'] is None and len(riders) >= 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Rider limit reached. Add a valid business registration number."
         )
 
     # Validation: Dispatch must have completed business details
@@ -446,50 +470,61 @@ async def get_rider_details(
     Get full rider profile + stats + dispatch-level aggregated stats.
     """
     try:
-        rider = (
+        # Fetch rider profile with basic fields
+        rider_resp = (
             await supabase.table("profiles")
-            .select("""
-                id,
-                full_name,
-                phone_number,
-                profile_image_url,
-                bike_number,
-                average_rating,
-                review_count,
-                is_online,
-                dispatch_id,
-                dispatch:profiles!profiles_dispatch_id_fkey(full_name as dispatch_name),
-                total_deliveries:count(delivery_orders!delivery_orders_rider_id_fkey.id)
-            """)
-            .eq("id", str(rider_id))
+            .select(
+                "id, full_name, phone_number, profile_image_url, bike_number, "
+                "average_rating, business_name, review_count, is_online, dispatcher_id, user_type"
+            )
+            .eq("id", rider_id)
             .eq("user_type", "RIDER")
-            .single()
             .execute()
         )
 
-        if not rider.data:
+        if not rider_resp.data or len(rider_resp.data) == 0:
+            logger.warning("rider_not_found", rider_id=str(rider_id))
             raise HTTPException(404, "Rider not found")
 
-        # Get dispatch aggregated stats if rider has a dispatch
+        rider = rider_resp.data[0]
+
+        # Log the user_type for debugging
+        logger.debug(
+            "fetched_rider_data",
+            rider_id=str(rider_id),
+            user_type=rider.get("user_type"),
+        )
+
         dispatch_stats = None
-        if rider.data.get("dispatch_id"):
-            dispatch = (
+
+        # Get dispatch name if dispatcher_id exists
+        if rider.get("dispatcher_id"):
+            # Get dispatch aggregated stats
+            stats_resp = (
                 await supabase.table("profiles")
-                .select("""
-                    dispatch_average_rating,
-                    dispatch_review_count,
-                    dispatch_total_riders
-                """)
-                .eq("id", rider.data["dispatch_id"])
-                .single()
+                .select("dispatch_average_rating, dispatch_review_count")
+                .eq("id", str(rider["dispatcher_id"]))
                 .execute()
             )
-            dispatch_stats = dispatch.data
 
-        return DetailedRiderResponse(**rider.data, dispatch_stats=dispatch_stats)
+            dispatch_stats = (
+                stats_resp.data[0]
+                if stats_resp.data and len(stats_resp.data) > 0
+                else {}
+            )
 
+        # Build final response
+        return DetailedRiderResponse(**rider, dispatch_stats=dispatch_stats)
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("get_rider_details failed", rider_id=str(rider_id), error=str(e))
+        logger.error(
+            "get_rider_details failed",
+            rider_id=str(rider_id),
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(500, "Failed to fetch rider details")
 
 
@@ -821,10 +856,11 @@ async def update_user_location(
         )
 
 
-async def toggle_online_status(
+async def toggle_online_or_can_pickup(
     user_id: UUID,
     supabase: AsyncClient,
-) -> dict:
+    field: str = "is_online",
+) -> OnlineStatusResponse:
     """
     Automatically toggle the user's online status:
     - If currently online → set to offline
@@ -835,7 +871,7 @@ async def toggle_online_status(
         # 1. Read current status
         current = (
             await supabase.table("profiles")
-            .select("is_online")
+            .select(field)
             .eq("id", str(user_id))
             .single()
             .execute()
@@ -844,7 +880,7 @@ async def toggle_online_status(
         if not current.data:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User profile not found")
 
-        old_status = current.data["is_online"]
+        old_status = current.data[field]
         new_status = not old_status  # flip it!
 
         # 2. Update
@@ -855,10 +891,13 @@ async def toggle_online_status(
             .execute()
         )
 
+        is_online_msg = "online" if new_status else "offline"
+        can_pickup_and_dropoff_msg = 'Pickup enabled' if new_status else 'Pickup disabled'
+        key = field == "is_online" and "is_online" or "can_pickup_and_dropoff"
         return {
             "success": True,
-            "message": f"You are now {'online' if new_status else 'offline'}",
-            "is_online": new_status,
+            "message": field == "is_online" and f"You are now {is_online_msg}." or f"{can_pickup_and_dropoff_msg}.",
+            key: new_status,
         }
 
     except Exception as e:

@@ -89,7 +89,7 @@ class AvailableRiderResponse(BaseModel):
     profile_image_url: Optional[str]
     bike_number: Optional[str]
     business_name: Optional[str] = Field(
-        None, description="Rider's personal business name (if any)"
+        None, description="Rider's company business name"
     )
     total_distance_travelled: Optional[Decimal] = 0.0
 
@@ -102,12 +102,16 @@ class AvailableRiderResponse(BaseModel):
     dispatch_id: Optional[UUID] = None
     dispatch_business_name: Optional[str] = None
     dispatch_average_rating: Optional[Decimal] = Field(
-        0.0, description="Fleet rating = average of all riders"
+        0.0, description="Company rating = average of all riders"
     )
     dispatch_total_reviews: int = 0
     dispatch_rider_count: int = 0
 
-    distance_km: Optional[Decimal] = None
+    distance_km: Optional[Decimal] = Field(
+        description="Distance from sender to rider in kilometers",
+        decimal_places=2,
+        default="0.00",
+    )
 
     class Config:
         from_attributes = True
@@ -194,6 +198,13 @@ class OnlineStatusToggle(BaseModel):
     )
 
 
+class OnlineStatusResponse(BaseModel):
+    success: bool
+    message: str
+    is_online: Optional[bool] = None
+    can_pickup_and_dropoff: Optional[bool] = None
+
+
 class UserLocationUpdate(BaseModel):
     latitude: float = Field(
         ..., ge=-90, le=90, description="Latitude in decimal degrees"
@@ -225,8 +236,7 @@ class DetailedRiderResponse(BaseModel):
     average_rating: Optional[Decimal] = 0.0
     review_count: int = 0
     is_online: bool
-    dispatch_id: Optional[UUID]
-    dispatch: Optional[DispatchInfo]
+    dispatcher_id: Optional[UUID]
     total_deliveries: int = 0
     dispatch_stats: Optional[DispatchStats]
 

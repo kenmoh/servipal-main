@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, HttpUrl
 from typing import Optional, List
 from uuid import UUID
 from decimal import Decimal
@@ -57,11 +57,11 @@ class EscrowAcceptRequest(BaseModel):
 
 class EscrowRejectRequest(BaseModel):
     reason: str = Field(..., min_length=10)
-    evidence_urls: Optional[List[str]] = None
+    evidence_urls: Optional[List[HttpUrl]] = None
 
 
 class EscrowCompletionProposal(BaseModel):
-    evidence_urls: List[str] = Field(default=[])
+    evidence_urls: List[HttpUrl] = Field(default=[])
     notes: Optional[str] = None
 
 

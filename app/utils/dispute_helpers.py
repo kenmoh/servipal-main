@@ -124,3 +124,94 @@ async def release_escrow(
         "update_wallet_balance",
         {"p_user_id": str(seller_id), "p_delta": amount, "p_field": "balance"},
     ).execute()
+
+
+# Helper: Release escrow funds for dispute (to all recipients)
+async def release_escrow_funds_for_dispute(agreement_id: UUID, supabase: AsyncClient):
+    agreement = (
+        await supabase.table("escrow_agreements")
+        .select("amount, commission_rate, initiator_id")
+        .eq("id", str(agreement_id))
+        .single()
+        .execute()
+        .data
+    )
+
+    full_amount = Decimal(str(agreement["amount"]))
+    commission_amount = full_amount * Decimal(str(agreement["commission_rate"]))
+
+    recipients = (
+        await supabase.table("escrow_agreement_parties")
+        .select("user_id, share_amount")
+        .eq("agreement_id", str(agreement_id))
+        .eq("role", "RECIPIENT")
+        .execute()
+        .data
+    )
+
+    for r in recipients:
+        share = Decimal(str(r["share_amount"]))
+        await supabase.rpc(
+            "update_wallet_balance",
+            {
+                "p_user_id": str(agreement["initiator_id"]),
+                "p_delta": -share,
+                "p_field": "escrow_balance",
+            },
+        ).execute()
+
+        await supabase.rpc(
+            "update_wallet_balance",
+            {
+                "p_user_id": str(r["user_id"]),
+                "p_delta": share,
+                "p_field": "balance",
+            },
+        ).execute()
+
+    await supabase.rpc(
+        "update_wallet_balance",
+        {
+            "p_user_id": str(agreement["initiator_id"]),
+            "p_delta": -commission_amount,
+            "p_field": "escrow_balance",
+        },
+    ).execute()
+
+    # Commission to platform
+    await (
+        supabase.table("platform_commissions")
+        .insert(
+            {
+                "service_type": "ESCROW_AGREEMENT",
+                "commission_amount": float(commission_amount),
+                "description": f"Commission from escrow dispute resolution {agreement_id}",
+            }
+        )
+        .execute()
+    )
+
+
+# Helper: Fetch escrow agreement details
+async def get_escrow_agreement(
+    agreement_id: UUID, supabase: AsyncClient
+) -> Dict[str, Any]:
+    """
+    Fetch escrow agreement details.
+    Returns dict with initiator_id, amount, commission_amount, status, etc.
+    """
+    resp = (
+        await supabase.table("escrow_agreements")
+        .select("id, initiator_id, amount, commission_amount, status")
+        .eq("id", str(agreement_id))
+        .single()
+        .execute()
+    )
+
+    if not resp.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Escrow agreement not found",
+        )
+
+    return resp.data

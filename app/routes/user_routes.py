@@ -6,6 +6,7 @@ from app.schemas.user_schemas import (
     ProfileUpdate,
     UserLocationUpdate,
     DetailedRiderResponse,
+    OnlineStatusResponse,
 )
 from app.services import user_service
 from app.dependencies.auth import get_current_profile, require_user_type
@@ -23,6 +24,7 @@ async def create_rider(
     current_user: dict = Depends(get_current_profile),
     dispatch_user=Depends(require_user_type([UserType.DISPATCH])),
     supabase: AsyncClient = Depends(get_supabase_admin_client),
+    
 ):
     """
     Dispatch owner creates a new rider account.
@@ -104,6 +106,7 @@ async def list_available_riders(
     lat: Optional[float] = Query(None, description="Pickup latitude"),
     lng: Optional[float] = Query(None, description="Pickup longitude"),
     max_km: int = Query(20, description="Max distance in KM"),
+     current_user: dict = Depends(get_current_profile),
     supabase=Depends(get_supabase_client),
 ):
     """
@@ -180,6 +183,7 @@ async def vendor_earnings_dashboard(
         )
     ),
     supabase=Depends(get_supabase_client),
+     current_user: dict = Depends(get_current_profile),
 ):
     """
     Get earnings dashboard for vendors and dispatch.
@@ -261,7 +265,9 @@ async def upload_backdrop(
 # ───────────────────────────────────────────────
 @router.get("/riders/{rider_id}", response_model=DetailedRiderResponse)
 async def get_rider_details(
-    rider_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
+    rider_id: UUID,
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_profile),
 ):
     """
     Get full rider profile + stats + dispatch-level aggregated stats.
@@ -269,19 +275,32 @@ async def get_rider_details(
     return await user_service.get_rider_details(rider_id, supabase)
 
 
-@router.post("/set-online")
+@router.post("/set-online", response_model=OnlineStatusResponse)
 async def set_online_status(
     current_profile: dict = Depends(get_current_profile),
     supabase: AsyncClient = Depends(get_supabase_client),
-):
+) -> OnlineStatusResponse:
     """
     Toggle the user's online/offline status (for riders/vendors).
 
     Returns:
-        dict: New status.
+        OnlineStatusResponse: New status.
     """
-    return await toggle_online_status(current_profile["id"], supabase)
+    return await toggle_online_or_can_pickup(user_id=current_profile["id"], supabase=supabase, field="is_online")
 
+
+@router.post("/set-pickup-dropoff", response_model=OnlineStatusResponse)
+async def set_pickup_dropoff_status(
+    current_profile: dict = Depends(get_current_profile),
+    supabase: AsyncClient = Depends(get_supabase_client),
+) -> OnlineStatusResponse:
+    """
+    Toggle the user's pickup/dropoff status (for riders/vendors).
+
+    Returns:
+        OnlineStatusResponse: New status.
+    """
+    return await toggle_online_or_can_pickup(user_id=current_profile["id"], supabase=supabase, field="can_pickup_and_dropoff")
 
 @router.post("/update-location")
 async def update_location_endpoint(

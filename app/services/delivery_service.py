@@ -52,6 +52,7 @@ async def initiate_delivery_payment(
         sender_id=str(sender_id),
         pickup=data.pickup_location,
         destination=data.destination,
+        data=data.model_dump(),
     )
     try:
         # 1. Calculate distance using RPC
@@ -88,7 +89,7 @@ async def initiate_delivery_payment(
         delivery_fee = round(delivery_fee, 2)
 
         # 4. Generate unique tx_ref
-        tx_ref = f"DEL-{uuid.uuid4().hex[:12].upper()}"
+        tx_ref = f"DELIVERY-{uuid.uuid4().hex[:12].upper()}"
 
         # 5. Save pending state in Redis
         pending_data = {
@@ -107,8 +108,13 @@ async def initiate_delivery_payment(
             tx_ref=tx_ref,
             amount=Decimal(str(delivery_fee)),
             public_key=settings.FLUTTERWAVE_PUBLIC_KEY,
+            distance_km=f"{distance_km:.1f} km",
             currency="NGN",
-            customer=PaymentCustomerInfo(**customer_info),
+            customer=PaymentCustomerInfo(
+                email=customer_info.get("email"),
+                phone_number=customer_info.get("phone_number"),
+                full_name=customer_info.get("full_name") or "N/A",
+            ),
             customization=PaymentCustomization(
                 title="Servipal Delivery",
                 description=f"From {data.pickup_location} to {data.destination} ({distance_km:.1f} km)",
@@ -133,7 +139,10 @@ async def initiate_delivery_payment(
 # 3. Assign Rider After Payment (RPC already updated earlier)
 # ───────────────────────────────────────────────
 async def assign_rider_to_order(
-    order_id: UUID, data: AssignRiderRequest, sender_id: UUID, supabase: AsyncClient
+    order_id: UUID,
+    data: AssignRiderRequest,
+    sender_id: UUID,
+    supabase: AsyncClient
 ) -> AssignRiderResponse:
     try:
         order = (
@@ -163,12 +172,12 @@ async def assign_rider_to_order(
 
         result = assign_resp.data
 
-        # Notify rider
+        # Notify rider on success
         if result["success"]:
             await notify_user(
                 user_id=data.rider_id,
                 title="New Delivery Assigned!",
-                body="You have a new order",
+                body="You have a new order to pick up",
                 data={"order_id": str(order_id), "type": "DELIVERY_ASSIGNED"},
                 supabase=supabase,
             )
@@ -186,6 +195,7 @@ async def assign_rider_to_order(
             "Rider is currently suspended" in error_msg
             or "Rider is blocked" in error_msg
             or "Rider not available" in error_msg
+            or "Rider limited to 1 delivery per day" in error_msg
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg)
         raise HTTPException(
@@ -456,6 +466,12 @@ async def sender_confirm_receipt(
             .eq("id", str(order_id))
             .execute()
         )
+
+        # Increment rider total deliveries
+        if order.get("rider_id"):
+            await supabase.rpc("increment_rider_total_delivery", {
+                "p_rider_id": str(order["rider_id"])
+            }).execute()
 
         # Notify rider/dispatch
         if order.get("rider_id"):

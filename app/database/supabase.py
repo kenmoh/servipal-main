@@ -1,5 +1,5 @@
 from typing import AsyncGenerator
-from supabase import AsyncClient, acreate_client
+from supabase import AsyncClient, acreate_client, AsyncClientOptions
 
 
 from app.config.config import settings
@@ -13,6 +13,9 @@ async def create_supabase_client() -> AsyncClient:
     supabase: AsyncClient = await acreate_client(
         settings.SUPABASE_URL,
         settings.SUPABASE_PUBLISHABLE_KEY,
+        # options=AsyncClientOptions(
+        #     storage=settings.SUPABASE_STORAGE_BUCKET_URL,
+        # ),
     )
     return supabase
 

@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
+from fastapi.openapi.docs import get_redoc_html
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import (
     user_routes,
@@ -17,24 +19,37 @@ from app.routes import (
     escrow_route,
 )
 from app.config.logging import logger
+from app.utils.payment import get_all_banks
+from app.schemas.bank_schema import BankSchema
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Handle application lifespan events"""
     # Startup
-    logger.info("application_started", version="1.0.0")
+    logger.info("Servipal Application Started", version="1.0.0")
     yield
     # Shutdown
-    logger.info("application_shutdown")
+    logger.info("Servipal Application Shutdown")
 
 
 app = FastAPI(
     title="ServiPal API",
-    description="Backend API for ServiPal - Food, Laundry, and Delivery Services",
+    description="Backend API for ServiPal - Food, Laundry, Delivery Services, and Product Marketplace",
     version="1.0.0",
     lifespan=lifespan,
+    # docs_url=None,
+    # redoc_url=None,
+    debug=True,
+    contact={
+        "name": "ServiPal",
+        "url": "https://servi-pal.com",
+        "email": "servipal@servi-pal.com",
+    },
 )
+
+
+FAVICON_URL = "https://mohdelivery.s3.us-east-1.amazonaws.com/favion/favicon.ico"
 
 # CORS middleware
 app.add_middleware(
@@ -110,6 +125,29 @@ async def health_check():
     """
     logger.debug("health_check_accessed")
     return {"status": "healthy"}
+
+
+# Override default ReDoc with custom favicon (optional)
+@app.get("/redoc", include_in_schema=False)
+def custom_redoc_html():
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=app.title,
+        redoc_favicon_url=FAVICON_URL,
+        redoc_js_url="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js",
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse(url=FAVICON_URL)
+
+
+@app.get("/api/list-of-banks", response_model=list[BankSchema], tags=["Get Banks"])
+async def get_banks():
+    """Get list of all supported bank(Nigeria)"""
+
+    return await get_all_banks()
 
 
 # Include Routers

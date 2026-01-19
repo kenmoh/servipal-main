@@ -1,6 +1,7 @@
 from supabase import AsyncClient
 from typing import Optional
 from decimal import Decimal
+from fastapi import Request
 
 
 async def log_audit_event(
@@ -14,8 +15,14 @@ async def log_audit_event(
     actor_id: Optional[str] = None,
     actor_type: str = "SYSTEM",
     notes: Optional[str] = None,
-    request=None,
+    request: Optional[Request] = None,
 ):
+    ip_address = None
+    user_agent = None
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+
     await (
         supabase.table("audit_logs")
         .insert(
@@ -29,8 +36,8 @@ async def log_audit_event(
                 "actor_id": actor_id,
                 "actor_type": actor_type,
                 "notes": notes,
-                "ip_address": request.client.host if request else None,
-                "user_agent": request.headers.get("user-agent") if request else None,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
             }
         )
         .execute()

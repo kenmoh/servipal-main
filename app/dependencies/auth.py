@@ -46,7 +46,7 @@ async def get_current_profile(
     resp = (
         await supabase_client.table("profiles")
         .select("*")
-        .eq("id", current_user["id"])
+        .eq("id", current_user.id)
         .execute()
     )
 
@@ -109,8 +109,8 @@ async def get_customer_contact_info(
     try:
         profile_resp = (
             await supabase_client.table("profiles")
-            .select("email, phone_number")
-            .eq("id", current_profile["id"])
+            .select("email, phone_number, full_name, business_name")
+            .eq("id", current_profile.get("id"))
             .single()
             .execute()
         )
@@ -123,9 +123,11 @@ async def get_customer_contact_info(
         profile = profile_resp.data
 
         return {
-            "email": profile.get("email"),
-            "phone_number": profile.get("phone_number")
-            or current_profile.get("phone", ""),
+            "email": current_profile.get("email"),
+            "phone_number": profile.get("phone_number", ""),
+            "full_name": profile.get("full_name")
+            if profile.get("full_name")
+            else profile.get("business_name", ""),
         }
 
     except Exception as e:

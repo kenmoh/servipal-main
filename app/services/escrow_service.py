@@ -1,5 +1,6 @@
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 from uuid import UUID
+from typing import List
 from decimal import Decimal
 from datetime import datetime, timedelta
 from app.schemas.escrow_schemas import (
@@ -10,19 +11,38 @@ from app.schemas.escrow_schemas import (
     EscrowCompletionProposal,
     EscrowCompletionVote,
 )
-from app.utils.commission import get_commission_rate
-from app.utils.audit import log_audit_event
-from app.config.logging import logger
+from app.services.dispute_service import create_dispute
+from app.schemas.dispute_schema import DisputeCreate
 from supabase import AsyncClient
+from app.utils.audit import log_audit_event
+from app.utils.commission import get_commission_rate
+from app.config.logging import logger
 
 
 async def create_escrow_agreement(
-    data: EscrowAgreementCreate, initiator_id: UUID, supabase: AsyncClient
+    data: EscrowAgreementCreate,
+    current_profile: dict,
+    supabase: AsyncClient,
+    request: Request = None,
 ) -> EscrowAgreementResponse:
     try:
         commission_rate = await get_commission_rate("ESCROW_AGREEMENT", supabase)
         commission_amount = data.amount * commission_rate
-        net_amount = data.amount - commission_amount
+        net_amount = data.amount  # Amount to be distributed to recipients
+        total_funding_amount = (
+            data.amount + commission_amount
+        )  # Total amount initiator must fund
+
+        # Get initiator email
+        initiator = (
+            await supabase.table("profiles")
+            .select("email")
+            .eq("id", str(current_profile["id"]))
+            .single()
+            .execute()
+            .data
+        )
+        initiator_email = initiator["email"]
 
         # Validate shares sum to net_amount
         total_shares = sum(
@@ -31,25 +51,43 @@ async def create_escrow_agreement(
         if total_shares != net_amount:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Recipient shares must sum to net amount after commission",
+                detail="Recipient shares must sum to the escrow amount",
             )
+
+        # Prevent self-dealing: initiator cannot be a recipient
+        for party in data.parties:
+            if party.role == "RECIPIENT" and party.email == initiator_email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Initiator cannot be a recipient in the escrow",
+                )
+
+        # Prevent self-dealing: initiator cannot be a recipient
+        for party in data.parties:
+            if party.role == "RECIPIENT" and party.email == current_profile.get(
+                "email"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Initiator cannot be a recipient in the escrow",
+                )
 
         # Create agreement
         agreement = (
             await supabase.table("escrow_agreements")
             .insert(
                 {
-                    "initiator_id": str(initiator_id),
+                    "initiator_id": str(current_profile["id"]),
                     "title": data.title,
                     "description": data.description,
                     "amount": Decimal(data.amount),
                     "commission_rate": Decimal(commission_rate),
                     "status": "DRAFT",
                     "terms": data.terms,
-                    "expires_at": (datetime.utcnow() + timedelta(days=14)).isoformat()
+                    "expires_at": (datetime.now() + timedelta(days=14)).isoformat()
                     if data.expires_at is None
                     else data.expires_at.isoformat(),
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now().isoformat(),
                 }
             )
             .execute()
@@ -78,14 +116,15 @@ async def create_escrow_agreement(
             entity_type="ESCROW_AGREEMENT",
             entity_id=str(agreement_id),
             action="CREATED",
-            actor_id=str(initiator_id),
+            actor_id=str(current_profile["id"]),
             actor_type="USER",
-            notes=f"Escrow agreement created for ₦{data.amount}",
+            notes=f"Escrow agreement created for ₦{data.amount} (total funding ₦{total_funding_amount})",
+            request=request,
         )
 
         return EscrowAgreementResponse(
             id=agreement_id,
-            initiator_id=initiator_id,
+            initiator_id=current_profile["id"],
             title=data.title,
             description=data.description,
             amount=data.amount,
@@ -95,22 +134,27 @@ async def create_escrow_agreement(
             status="DRAFT",
             terms=data.terms,
             invite_code=invite_code,
-            expires_at=datetime.utcnow() + timedelta(days=14)
+            expires_at=datetime.now() + timedelta(days=14)
             if data.expires_at is None
             else data.expires_at,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(),
             parties=[p.model_dump() for p in data.parties],
         )
 
     except Exception as e:
+        logger.error(f"Error creating escrow agreement: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create: {str(e)}",
+            detail="Failed to create escrow agreement. Please try again.",
         )
 
 
 async def accept_escrow_agreement(
-    agreement_id: UUID, invite_code: str, user_id: UUID, supabase: AsyncClient
+    agreement_id: UUID,
+    invite_code: str,
+    user_id: UUID,
+    supabase: AsyncClient,
+    request: Request = None,
 ) -> dict:
     try:
         party = (
@@ -144,9 +188,7 @@ async def accept_escrow_agreement(
         # Accept
         await (
             supabase.table("escrow_agreement_parties")
-            .update(
-                {"has_accepted": True, "accepted_at": datetime.utcnow().isoformat()}
-            )
+            .update({"has_accepted": True, "accepted_at": datetime.now().isoformat()})
             .eq("id", party["id"])
             .execute()
         )
@@ -176,6 +218,7 @@ async def accept_escrow_agreement(
         }
 
     except Exception as e:
+        logger.error(f"Error accepting escrow agreement: {str(e)}")
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, f"Acceptance failed: {str(e)}"
         )
@@ -187,6 +230,7 @@ async def reject_escrow_agreement(
     user_id: UUID,
     data: EscrowRejectRequest,
     supabase: AsyncClient,
+    request: Request = None,
 ) -> dict:
     try:
         party = (
@@ -217,9 +261,10 @@ async def reject_escrow_agreement(
             .data
         )
 
-        if agreement["status"] not in ("DRAFT", "PENDING_ACCEPTANCE"):
+        if agreement["status"] not in ("DRAFT", "PENDING_ACCEPTANCE", "FUNDED"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot reject anymore"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot reject at this stage",
             )
 
         # Mark rejection
@@ -230,56 +275,65 @@ async def reject_escrow_agreement(
             .execute()
         )
 
-        # Cancel agreement
-        await (
-            supabase.table("escrow_agreements")
-            .update(
-                {
-                    "status": "CANCELLED",
-                    "cancelled_at": datetime.utcnow().isoformat(),
-                    "cancelled_reason": f"Rejected by party: {data.reason}",
-                }
-            )
-            .eq("id", str(agreement_id))
-            .execute()
-        )
-
-        # Refund if funded
-        if agreement["status"] == "FUNDED":
-            agreement_details = (
-                await supabase.table("escrow_agreements")
-                .select("amount, commission_amount, initiator_id")
+        if agreement["status"] in ("DRAFT", "PENDING_ACCEPTANCE"):
+            # Cancel agreement
+            await (
+                supabase.table("escrow_agreements")
+                .update(
+                    {
+                        "status": "CANCELLED",
+                        "cancelled_at": datetime.now().isoformat(),
+                        "cancelled_reason": f"Rejected by party: {data.reason}",
+                    }
+                )
                 .eq("id", str(agreement_id))
-                .single()
                 .execute()
-                .data
             )
 
-            full_amount = Decimal(str(agreement_details["amount"]))
-            commission_amount = Decimal(str(agreement_details["commission_amount"]))
-            initiator_id = agreement_details["initiator_id"]
+            await log_audit_event(
+                supabase,
+                entity_type="ESCROW_AGREEMENT",
+                entity_id=str(agreement_id),
+                action="CANCELLED",
+                actor_id=str(user_id),
+                actor_type="USER",
+                notes=f"Agreement cancelled due to rejection: {data.reason}",
+                request=request,
+            )
 
-            await supabase.rpc(
-                "update_wallet_balance",
-                {
-                    "p_user_id": str(initiator_id),
-                    "p_delta": full_amount - commission_amount,
-                    "p_field": "balance",
-                },
-            ).execute()
+        elif agreement["status"] == "FUNDED":
+            # Create dispute instead of canceling
+            dispute_data = DisputeCreate(
+                order_id=agreement_id,
+                order_type="ESCROW_AGREEMENT",
+                reason=f"Escrow rejection: {data.reason}",
+            )
+            await create_dispute(dispute_data, user_id, supabase)
 
-            await supabase.rpc(
-                "update_wallet_balance",
-                {
-                    "p_user_id": str(initiator_id),
-                    "p_delta": -(full_amount - commission_amount),
-                    "p_field": "escrow_balance",
-                },
-            ).execute()
+            await log_audit_event(
+                supabase,
+                entity_type="ESCROW_AGREEMENT",
+                entity_id=str(agreement_id),
+                action="DISPUTE_OPENED",
+                actor_id=str(user_id),
+                actor_type="USER",
+                notes=f"Dispute opened due to rejection: {data.reason}",
+                request=request,
+            )
 
-        return {"success": True, "message": "Rejected and cancelled"}
+        # Refund if cancelled and was funded (for DRAFT/PENDING that were funded? but unlikely)
+        # Since we check status before, and for FUNDED we dispute, no refund here.
+        # Refunds will be handled by dispute resolution if needed.
+
+        return {
+            "success": True,
+            "message": "Rejected"
+            if agreement["status"] == "FUNDED"
+            else "Rejected and cancelled",
+        }
 
     except Exception as e:
+        logger.error(f"Error rejecting escrow agreement: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Rejection failed: {str(e)}",
@@ -287,7 +341,10 @@ async def reject_escrow_agreement(
 
 
 async def fund_escrow_agreement(
-    agreement_id: UUID, initiator_id: UUID, supabase: AsyncClient
+    agreement_id: UUID,
+    initiator_id: UUID,
+    supabase: AsyncClient,
+    request: Request = None,
 ) -> dict:
     try:
         agreement = (
@@ -308,7 +365,26 @@ async def fund_escrow_agreement(
         if agreement["status"] != "READY_FOR_FUNDING":
             raise HTTPException(400, f"Cannot fund - status: {agreement['status']}")
 
-        full_amount = Decimal(str(agreement["amount"]))
+        # Check expiration
+        expires_at = datetime.fromisoformat(agreement.get("expires_at", ""))
+        if datetime.now() > expires_at:
+            raise HTTPException(400, "Agreement has expired")
+
+        full_amount = Decimal(str(agreement["amount"])) + Decimal(
+            str(agreement["commission_amount"])
+        )
+
+        # Check balance
+        balance_resp = (
+            await supabase.table("wallets")
+            .select("balance")
+            .eq("user_id", str(initiator_id))
+            .single()
+            .execute()
+        )
+        current_balance = Decimal(str(balance_resp.data["balance"]))
+        if current_balance < full_amount:
+            raise HTTPException(400, "Insufficient balance")
 
         await supabase.rpc(
             "update_wallet_balance",
@@ -330,14 +406,27 @@ async def fund_escrow_agreement(
 
         await (
             supabase.table("escrow_agreements")
-            .update({"status": "FUNDED", "funded_at": datetime.utcnow().isoformat()})
+            .update({"status": "FUNDED", "funded_at": datetime.now().isoformat()})
             .eq("id", str(agreement_id))
             .execute()
+        )
+
+        await log_audit_event(
+            supabase,
+            entity_type="ESCROW_AGREEMENT",
+            entity_id=str(agreement_id),
+            action="FUNDED",
+            actor_id=str(initiator_id),
+            actor_type="USER",
+            change_amount=-full_amount,
+            notes=f"Escrow funded with ₦{full_amount}",
+            request=request,
         )
 
         return {"success": True, "message": "Funded", "status": "FUNDED"}
 
     except Exception as e:
+        logger.error(f"Error funding escrow agreement: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Funding failed: {str(e)}",
@@ -349,6 +438,7 @@ async def propose_escrow_completion(
     user_id: UUID,
     data: EscrowCompletionProposal,
     supabase: AsyncClient,
+    request: Request = None,
 ) -> dict:
     try:
         is_party = (
@@ -388,8 +478,8 @@ async def propose_escrow_completion(
                     "proposer_id": str(user_id),
                     "evidence_urls": data.evidence_urls,
                     "notes": data.notes,
-                    "proposed_at": datetime.utcnow().isoformat(),
-                    "expires_at": (datetime.utcnow() + timedelta(days=14)).isoformat(),
+                    "proposed_at": datetime.now().isoformat(),
+                    "expires_at": (datetime.now() + timedelta(days=14)).isoformat(),
                 }
             )
             .execute()
@@ -398,6 +488,7 @@ async def propose_escrow_completion(
         return {"success": True, "message": "Completion proposed. Waiting for votes."}
 
     except Exception as e:
+        logger.error(f"Error proposing escrow completion: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Proposal failed: {str(e)}",
@@ -405,7 +496,11 @@ async def propose_escrow_completion(
 
 
 async def vote_escrow_completion(
-    proposal_id: UUID, user_id: UUID, data: EscrowCompletionVote, supabase: AsyncClient
+    proposal_id: UUID,
+    user_id: UUID,
+    data: EscrowCompletionVote,
+    supabase: AsyncClient,
+    request: Request = None,
 ) -> dict:
     try:
         proposal = (
@@ -458,12 +553,13 @@ async def vote_escrow_completion(
         if not pending.data:
             # All confirmed → release
             return await release_escrow_funds(
-                proposal["agreement_id"], user_id, supabase
+                proposal["agreement_id"], user_id, supabase, request
             )
 
         return {"success": True, "message": "Vote recorded. Waiting for others."}
 
     except Exception as e:
+        logger.error(f"Error voting on escrow completion: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Vote failed: {str(e)}",
@@ -471,7 +567,7 @@ async def vote_escrow_completion(
 
 
 async def release_escrow_funds(
-    agreement_id: UUID, user_id: UUID, supabase: AsyncClient
+    agreement_id: UUID, user_id: UUID, supabase: AsyncClient, request: Request = None
 ) -> dict:
     try:
         agreement = (
@@ -533,16 +629,27 @@ async def release_escrow_funds(
 
         await (
             supabase.table("escrow_agreements")
-            .update(
-                {"status": "COMPLETED", "completed_at": datetime.utcnow().isoformat()}
-            )
+            .update({"status": "COMPLETED", "completed_at": datetime.now().isoformat()})
             .eq("id", str(agreement_id))
             .execute()
+        )
+
+        await log_audit_event(
+            supabase,
+            entity_type="ESCROW_AGREEMENT",
+            entity_id=str(agreement_id),
+            action="COMPLETED",
+            actor_id=str(user_id),
+            actor_type="USER",
+            change_amount=net_amount,
+            notes=f"Escrow completed, funds released ₦{net_amount}",
+            request=request,
         )
 
         return {"success": True, "message": "Funds released", "released": net_amount}
 
     except Exception as e:
+        logger.error("Fund release failed: ", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Release failed: {str(e)}",
