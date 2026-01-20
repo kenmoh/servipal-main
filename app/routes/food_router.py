@@ -32,6 +32,7 @@ async def list_food_vendors(
     lat: Optional[float] = Query(None, description="Latitude for nearby search"),
     lng: Optional[float] = Query(None, description="Longitude for nearby search"),
     supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_profile)
 ):
     """
     List restaurant vendors.
@@ -48,7 +49,10 @@ async def list_food_vendors(
 
 @router.get("/vendors/{vendor_id}", response_model=VendorDetailResponse)
 async def get_vendor_menu(
-    vendor_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
+    vendor_id: UUID, 
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_profile)
+
 ):
     """
     Get vendor details and full menu.

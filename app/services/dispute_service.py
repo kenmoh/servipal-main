@@ -85,7 +85,10 @@ async def create_dispute(
 # Post Message
 # ───────────────────────────────────────────────
 async def post_dispute_message(
-    dispute_id: UUID, data: DisputeMessageCreate, sender_id: UUID, supabase: AsyncClient
+    dispute_id: UUID, 
+    data: DisputeMessageCreate, 
+    sender_id: UUID, supabase: AsyncClient,
+    
 ):
     # Check participant
     dispute = (

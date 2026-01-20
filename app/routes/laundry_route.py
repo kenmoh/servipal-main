@@ -31,6 +31,7 @@ async def list_laundry_vendors(
     lat: Optional[float] = Query(None),
     lng: Optional[float] = Query(None),
     supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_profile)
 ):
     """
     List laundry vendors.
@@ -47,7 +48,9 @@ async def list_laundry_vendors(
 
 @router.get("/vendors/{vendor_id}", response_model=LaundryVendorDetailResponse)
 async def get_laundry_vendor_detail(
-    vendor_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
+    vendor_id: UUID, 
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_profile)
 ):
     """
     Get laundry vendor details and menu.

@@ -51,7 +51,9 @@ async def get_my_disputes(
 
 @router.get("/{dispute_id}", response_model=DisputeResponse)
 async def get_dispute_detail(
-    dispute_id: UUID, supabase: AsyncClient = Depends(get_supabase_client)
+    dispute_id: UUID, 
+    supabase: AsyncClient = Depends(get_supabase_client),
+    current_user: dict = Depends(get_current_profile)
 ):
     """
     Get details of a specific dispute.
